@@ -62,6 +62,74 @@ def escape_sql(s) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Derivative issuer detection
+# ---------------------------------------------------------------------------
+_DERIVATIVE_PATTERNS = [
+    "DAILY TRADING SUMMARY",
+    "DAILY TRADING REPORT",
+    "DAILY REPORT ON",
+]
+
+# Known derivative issuers: map title keywords to short identifiers
+_KNOWN_ISSUERS = {
+    "HUATAI": "HUATAI",
+    "CITIGROUP": "CITI",
+    "UBS": "UBS",
+    "HSBC": "HSBC",
+    "HK AND SHANGHAI BANK": "HSBC",
+    "BOCI": "BOCI",
+    "SOCIETE GENERALE": "SOCGEN",
+    "BANK OF EAST ASIA": "BEA",
+    "GUOTAI JUNAN": "GUOTAI",
+    "MORGAN STANLEY": "MORGAN",
+    "KOREA INVESTMENT": "KOREA",
+    "CITIC": "CITIC",
+    "JP MORGAN": "JPM",
+    "JPMORGAN": "JPM",
+    "GOLDMAN SACHS": "GS",
+    "CREDIT SUISSE": "CS",
+    "BARCLAYS": "BARCLAYS",
+    "BNP PARIBAS": "BNP",
+    "MACQUARIE": "MACQUARIE",
+    "HAITONG": "HAITONG",
+    "STANDARD CHARTERED": "STANCHART",
+    "DEUTSCHE BANK": "DB",
+    "BOCOM": "BOCOM",
+    "CHINA INTERNATIONAL": "CICC",
+}
+
+
+def is_derivative_issuer_filing(title: str) -> bool:
+    """Return True if the title indicates a derivative issuer filing (warrants/CBBC)."""
+    t = (title or "").upper()
+    return any(p in t for p in _DERIVATIVE_PATTERNS)
+
+
+def extract_issuer_name(title: str) -> str:
+    """Extract the issuer short name from a derivative filing title.
+
+    Uses a known-issuers lookup first, then falls back to first-word extraction.
+    """
+    t_upper = (title or "").upper()
+    # Check known issuers first (longest match wins)
+    for keyword, short in sorted(_KNOWN_ISSUERS.items(), key=lambda x: -len(x[0])):
+        if keyword in t_upper:
+            return short
+
+    # Fallback: extract the first word before the 'Daily' separator
+    for sep in [" - Daily", " -Daily", " Daily"]:
+        idx = title.find(sep)
+        if idx == -1:
+            idx = t_upper.find(sep.upper())
+        if idx > 0:
+            issuer = title[:idx].strip()
+            first_word = issuer.split()[0].upper() if issuer else ""
+            first_word = re.sub(r"[^A-Z0-9]", "", first_word)
+            return first_word if first_word else "DERIV"
+    return "DERIV"
+
+
+# ---------------------------------------------------------------------------
 # Filing classification
 # ---------------------------------------------------------------------------
 def classify_filing(title: str) -> Tuple[str, str]:

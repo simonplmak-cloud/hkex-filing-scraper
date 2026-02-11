@@ -16,7 +16,15 @@ from .api import REQUESTS_AVAILABLE, fetch_chunk_via_api, generate_monthly_chunk
 from .config import HKEX_BASE_URL, MAX_DOWNLOAD_SIZE, MAX_DOWNLOAD_WORKERS
 from .db import surreal_query, upsert_batch_with_retry
 from .extractor import extract_content_with_tables
-from .utils import classify_filing, escape_sql, extract_referenced_tickers, log, squash_ws
+from .utils import (
+    classify_filing,
+    escape_sql,
+    extract_issuer_name,
+    extract_referenced_tickers,
+    is_derivative_issuer_filing,
+    log,
+    squash_ws,
+)
 
 # ---------------------------------------------------------------------------
 # Supported document extensions
@@ -91,7 +99,8 @@ def _save_filings_batch_metadata(filings: list, dry_run: bool = False) -> int:
             f"{f['stockCode']}{f['date']}{f.get('title', '')}".encode()
         ).hexdigest()[:16]
 
-        ft, fs = classify_filing(f.get("title", ""))
+        title_str = f.get("title", "")
+        ft, fs = classify_filing(title_str)
         date_str = f.get("date", "")
         filing_date_expr = "NULL"
         if date_str:
@@ -102,10 +111,22 @@ def _save_filings_batch_metadata(filings: list, dry_run: bool = False) -> int:
                 filing_date_expr = "NULL"
 
         raw_code = str(f["stockCode"]).lstrip("0") or "0"
-        ticker = f"{raw_code.zfill(4)}.HK"
+
+        # Detect derivative issuer filings (empty stock code + matching title)
+        filing_category = "LISTED_COMPANY"  # default
+        if (not f["stockCode"].strip()) and is_derivative_issuer_filing(title_str):
+            issuer_short = extract_issuer_name(title_str)
+            ticker = f"{issuer_short}_DERIV.HK"
+            filing_category = "DERIVATIVE_ISSUER"
+        elif not f["stockCode"].strip():
+            ticker = "UNKNOWN.HK"
+            filing_category = "UNKNOWN"
+        else:
+            ticker = f"{raw_code.zfill(4)}.HK"
+
         doc_url = f.get("link", "")
 
-        ref_tickers = extract_referenced_tickers(f.get("title", ""), str(f["stockCode"]))
+        ref_tickers = extract_referenced_tickers(title_str, str(f["stockCode"]))
         ref_tickers_json = json.dumps(ref_tickers)
 
         sql_statements.append(
@@ -117,6 +138,7 @@ def _save_filings_batch_metadata(filings: list, dry_run: bool = False) -> int:
             "  exchange       = 'HK',\n"
             "  filingType     = '{ft}',\n"
             "  filingSubtype  = '{fs}',\n"
+            "  filingCategory = '{filingCategory}',\n"
             "  title          = '{title}',\n"
             "  filingDate     = {filingDateExpr},\n"
             "  documentUrl    = '{docUrl}',\n"
@@ -130,7 +152,8 @@ def _save_filings_batch_metadata(filings: list, dry_run: bool = False) -> int:
                 stockName=escape_sql(squash_ws(f.get("stockName", ""))),
                 ft=ft,
                 fs=escape_sql(fs),
-                title=escape_sql(squash_ws(f.get("title", ""))),
+                filingCategory=filing_category,
+                title=escape_sql(squash_ws(title_str)),
                 filingDateExpr=filing_date_expr,
                 docUrl=escape_sql(doc_url),
                 refTickers=ref_tickers_json,

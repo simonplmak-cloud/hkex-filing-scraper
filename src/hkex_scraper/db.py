@@ -115,6 +115,7 @@ DEFINE FIELD IF NOT EXISTS stockName      ON TABLE exchange_filing TYPE option<s
 DEFINE FIELD IF NOT EXISTS exchange       ON TABLE exchange_filing TYPE string;
 DEFINE FIELD IF NOT EXISTS filingType     ON TABLE exchange_filing TYPE string;
 DEFINE FIELD IF NOT EXISTS filingSubtype  ON TABLE exchange_filing TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS filingCategory ON TABLE exchange_filing TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS title          ON TABLE exchange_filing TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS filingDate     ON TABLE exchange_filing TYPE option<datetime>;
 DEFINE FIELD IF NOT EXISTS documentUrl    ON TABLE exchange_filing TYPE option<string>;
@@ -149,6 +150,7 @@ DEFINE INDEX IF NOT EXISTS idx_ef_date      ON TABLE exchange_filing COLUMNS fil
 DEFINE INDEX IF NOT EXISTS idx_ef_type      ON TABLE exchange_filing COLUMNS filingType;
 DEFINE INDEX IF NOT EXISTS idx_ef_source    ON TABLE exchange_filing COLUMNS source;
 DEFINE INDEX IF NOT EXISTS idx_ef_docstatus ON TABLE exchange_filing COLUMNS documentStatus;
+DEFINE INDEX IF NOT EXISTS idx_ef_category  ON TABLE exchange_filing COLUMNS filingCategory;
 """
     if COMPANY_TABLE:
         base += f"""
