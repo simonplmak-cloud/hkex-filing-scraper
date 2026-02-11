@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import List, Tuple
 
 from .api import REQUESTS_AVAILABLE, fetch_chunk_via_api, generate_monthly_chunks
-from .config import HKEX_BASE_URL, MAX_DOWNLOAD_SIZE, MAX_DOWNLOAD_WORKERS
+from .config import HKEX_BASE_URL, MAX_DOWNLOAD_SIZE, MAX_DOWNLOAD_WORKERS, MAX_SQL_BODY_SIZE
 from .db import surreal_query, upsert_batch_with_retry
 from .extractor import extract_content_with_tables
 from .utils import (
@@ -173,7 +173,7 @@ def _save_document_to_filing(
     doc_url: str,
     extracted_text: str = "",
     tables_json: list | None = None,
-) -> bool:
+) -> Tuple[bool, str]:
     """Save extracted text + metadata to an existing filing record."""
     ext = doc_url.lower().split("?")[0].split("#")[0]
     if ext.endswith(".pdf"):
@@ -188,39 +188,80 @@ def _save_document_to_filing(
         doc_type = "unknown"
 
     doc_hash = hashlib.md5(raw_bytes).hexdigest() if raw_bytes else ""
-    safe_text = escape_sql(extracted_text) if extracted_text else ""
-    text_len = len(extracted_text)
     tables_count = len(tables_json) if tables_json else 0
     native_tables = json.dumps(tables_json, ensure_ascii=False) if tables_json else "[]"
 
-    sql = (
-        "UPDATE exchange_filing:{fid} SET\n"
-        "  documentSize     = {size},\n"
-        "  documentType     = '{dtype}',\n"
-        "  documentHash     = '{dh}',\n"
-        "  documentText     = '{dt}',\n"
-        "  documentTextLen  = {dtl},\n"
-        "  documentTables   = {tables},\n"
-        "  documentTableCnt = {tcnt},\n"
-        "  documentStatus   = 'processed',\n"
-        "  updatedAt        = time::now()\n"
-        "RETURN NONE;\n"
-    ).format(
-        fid=fid,
-        size=size_bytes,
-        dtype=doc_type,
-        dh=doc_hash,
-        dt=safe_text,
-        dtl=text_len,
-        tables=native_tables,
-        tcnt=tables_count,
-    )
+    def _build_save_sql(text: str, status: str = "processed", truncated: bool = False) -> str:
+        safe_text = escape_sql(text) if text else ""
+        text_len = len(text)
+        return (
+            "UPDATE exchange_filing:{fid} SET\n"
+            "  documentSize     = {size},\n"
+            "  documentType     = '{dtype}',\n"
+            "  documentHash     = '{dh}',\n"
+            "  documentText     = '{dt}',\n"
+            "  documentTextLen  = {dtl},\n"
+            "  documentTables   = {tables},\n"
+            "  documentTableCnt = {tcnt},\n"
+            "  documentStatus   = '{status}',\n"
+            "  documentStatusReason = '{reason}',\n"
+            "  updatedAt        = time::now()\n"
+            "RETURN NONE;\n"
+        ).format(
+            fid=fid,
+            size=size_bytes,
+            dtype=doc_type,
+            dh=doc_hash,
+            dt=safe_text,
+            dtl=text_len,
+            tables=native_tables,
+            tcnt=tables_count,
+            status=status,
+            reason=f"truncated_from_{len(extracted_text)}" if truncated else "",
+        )
+
+    def _is_413(result: dict) -> bool:
+        err = result.get("error", "") if isinstance(result, dict) else ""
+        return "413" in str(err)
+
+    # --- First attempt: full text ---
+    sql = _build_save_sql(extracted_text)
     result = surreal_query(sql, timeout=60)
-    success = not (isinstance(result, dict) and result.get("error"))
-    if not success:
-        err = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
-        log(f"  Doc save failed for {fid}: {str(err)[:200]}")
-    return success
+    if not (isinstance(result, dict) and result.get("error")):
+        return True, ""  # success
+
+    err = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
+
+    # --- 413 detected: retry with truncated text ---
+    if _is_413(result):
+        truncated_text = extracted_text[:MAX_SQL_BODY_SIZE]
+        # Trim to last complete line to avoid mid-word cuts
+        last_newline = truncated_text.rfind("\n")
+        if last_newline > MAX_SQL_BODY_SIZE // 2:
+            truncated_text = truncated_text[:last_newline]
+        log(
+            f"  413 for {fid}: text too large ({len(extracted_text)} chars), "
+            f"retrying with truncated ({len(truncated_text)} chars)"
+        )
+
+        sql_retry = _build_save_sql(truncated_text, status="processed", truncated=True)
+        result_retry = surreal_query(sql_retry, timeout=60)
+        if not (isinstance(result_retry, dict) and result_retry.get("error")):
+            return True, ""  # success with truncation
+
+        # Truncation retry also failed
+        retry_err = (
+            result_retry.get("error", "unknown")
+            if isinstance(result_retry, dict)
+            else "unknown"
+        )
+        log(f"  Doc save failed for {fid} even after truncation: {str(retry_err)[:200]}")
+        return False, "http_413_truncation_failed"
+
+    # --- Non-413 error ---
+    log(f"  Doc save failed for {fid}: {str(err)[:200]}")
+    error_code = f"save_error:{str(err)[:100]}"
+    return False, error_code
 
 
 def _mark_filing_status(fid: str, status: str, reason: str = "") -> bool:
@@ -482,16 +523,17 @@ def run_phase2(
             except Exception as e:
                 log(f"  Text extraction error for {fid}: {e}")
 
-            if _save_document_to_filing(
+            success, error_code = _save_document_to_filing(
                 fid, raw_bytes, size_bytes, doc_url, extracted_text, tables_json
-            ):
+            )
+            if success:
                 batch_downloaded += 1
                 if extracted_text:
                     batch_texts += 1
                 if tables_json:
                     batch_tables += len(tables_json)
             else:
-                _mark_filing_status(fid, "failed", "save_error")
+                _mark_filing_status(fid, "failed", error_code or "save_error")
                 stats["errors"] += 1
 
         stats["docs_downloaded"] += batch_downloaded

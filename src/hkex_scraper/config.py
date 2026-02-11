@@ -53,6 +53,7 @@ LOG_DIR: Path = Path.cwd() / "logs"
 BATCH_SIZE: int = 100
 MAX_DOWNLOAD_WORKERS: int = int(os.environ.get("MAX_DOWNLOAD_WORKERS", "15"))
 MAX_DOWNLOAD_SIZE: int = 25 * 1024 * 1024  # 25 MB
+MAX_SQL_BODY_SIZE: int = 900 * 1024          # ~900 KB text limit (SurrealDB /sql endpoint = 1 MiB)
 
 # ---------------------------------------------------------------------------
 # HKEx API
