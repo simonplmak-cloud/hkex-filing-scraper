@@ -1,0 +1,511 @@
+"""Pipeline orchestration: Phase 1 (metadata scrape) and Phase 2 (document backfill)."""
+
+from __future__ import annotations
+
+import hashlib
+import io
+import json
+import sys
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from typing import List, Tuple
+
+from .api import REQUESTS_AVAILABLE, fetch_chunk_via_api, generate_monthly_chunks
+from .config import HKEX_BASE_URL, MAX_DOWNLOAD_SIZE, MAX_DOWNLOAD_WORKERS
+from .db import surreal_query, upsert_batch_with_retry
+from .extractor import extract_content_with_tables
+from .utils import classify_filing, escape_sql, extract_referenced_tickers, log, squash_ws
+
+# ---------------------------------------------------------------------------
+# Supported document extensions
+# ---------------------------------------------------------------------------
+SUPPORTED_EXTENSIONS = (".pdf", ".htm", ".html", ".xlsx", ".xls", ".doc", ".docx")
+
+
+# ---------------------------------------------------------------------------
+# Document download helpers
+# ---------------------------------------------------------------------------
+
+def _download_document(url: str, filing_id: str) -> Tuple[bytes, int, str]:
+    """Download a document if <= MAX_DOWNLOAD_SIZE.
+
+    Returns ``(raw_bytes, size_bytes, skip_reason)``.
+    """
+    if not url:
+        return b"", 0, "no_url"
+    u = url.lower().split("?")[0].split("#")[0]
+    if not any(u.endswith(ext) for ext in SUPPORTED_EXTENSIONS):
+        return b"", 0, "unsupported_type"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": (
+                    "application/pdf,text/html,"
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
+                    "*/*;q=0.8"
+                ),
+            },
+        )
+        with urllib.request.urlopen(req, timeout=60) as response:
+            content_length = response.headers.get("Content-Length")
+            if content_length and int(content_length) > MAX_DOWNLOAD_SIZE:
+                return b"", 0, "too_large"
+            content = response.read()
+            if len(content) > MAX_DOWNLOAD_SIZE:
+                return b"", 0, "too_large"
+            return content, len(content), ""
+    except urllib.error.HTTPError as e:
+        log(f"  Download error for {filing_id}: HTTP {e.code}")
+        return b"", 0, f"http_{e.code}"
+    except Exception as e:
+        log(f"  Download error for {filing_id}: {type(e).__name__}: {e}")
+        return b"", 0, f"error:{type(e).__name__}"
+
+
+def _download_worker(args: Tuple[str, str]) -> Tuple[str, str, bytes, int, str]:
+    """Thread-safe wrapper for ``_download_document``."""
+    fid, url = args
+    raw_bytes, size_bytes, skip_reason = _download_document(url, fid)
+    return fid, url, raw_bytes, size_bytes, skip_reason
+
+
+# ---------------------------------------------------------------------------
+# Save helpers
+# ---------------------------------------------------------------------------
+
+def _save_filings_batch_metadata(filings: list, dry_run: bool = False) -> int:
+    """Save filing metadata in batches. Phase 1 operation."""
+    if not filings:
+        return 0
+    if dry_run:
+        log(f" [DRY-RUN] Would save {len(filings)} filings (metadata)")
+        return len(filings)
+
+    sql_statements: List[str] = []
+    for f in filings:
+        fid = hashlib.md5(
+            f"{f['stockCode']}{f['date']}{f.get('title', '')}".encode()
+        ).hexdigest()[:16]
+
+        ft, fs = classify_filing(f.get("title", ""))
+        date_str = f.get("date", "")
+        filing_date_expr = "NULL"
+        if date_str:
+            try:
+                dd, mm, yyyy = date_str.split("/")
+                filing_date_expr = f"d'{yyyy}-{mm}-{dd}'"
+            except Exception:
+                filing_date_expr = "NULL"
+
+        raw_code = str(f["stockCode"]).lstrip("0") or "0"
+        ticker = f"{raw_code.zfill(4)}.HK"
+        doc_url = f.get("link", "")
+
+        ref_tickers = extract_referenced_tickers(f.get("title", ""), str(f["stockCode"]))
+        ref_tickers_json = json.dumps(ref_tickers)
+
+        sql_statements.append(
+            "UPSERT exchange_filing:{fid} SET\n"
+            "  filingId       = '{fid}',\n"
+            "  companyTicker  = '{ticker}',\n"
+            "  stockCode      = '{stockCode}',\n"
+            "  stockName      = '{stockName}',\n"
+            "  exchange       = 'HK',\n"
+            "  filingType     = '{ft}',\n"
+            "  filingSubtype  = '{fs}',\n"
+            "  title          = '{title}',\n"
+            "  filingDate     = {filingDateExpr},\n"
+            "  documentUrl    = '{docUrl}',\n"
+            "  referencedTickers = {refTickers},\n"
+            "  source         = 'HKEx',\n"
+            "  updatedAt      = time::now()\n"
+            "RETURN NONE;\n".format(
+                fid=fid,
+                ticker=ticker,
+                stockCode=escape_sql(f["stockCode"]),
+                stockName=escape_sql(squash_ws(f.get("stockName", ""))),
+                ft=ft,
+                fs=escape_sql(fs),
+                title=escape_sql(squash_ws(f.get("title", ""))),
+                filingDateExpr=filing_date_expr,
+                docUrl=escape_sql(doc_url),
+                refTickers=ref_tickers_json,
+            )
+        )
+
+    saved_count = upsert_batch_with_retry(sql_statements)
+    if saved_count < len(sql_statements):
+        log(f"  Saved {saved_count} / {len(sql_statements)} filings after retries")
+    return saved_count
+
+
+def _save_document_to_filing(
+    fid: str,
+    raw_bytes: bytes,
+    size_bytes: int,
+    doc_url: str,
+    extracted_text: str = "",
+    tables_json: list | None = None,
+) -> bool:
+    """Save extracted text + metadata to an existing filing record."""
+    ext = doc_url.lower().split("?")[0].split("#")[0]
+    if ext.endswith(".pdf"):
+        doc_type = "pdf"
+    elif ext.endswith(".htm") or ext.endswith(".html"):
+        doc_type = "html"
+    elif ext.endswith(".xlsx") or ext.endswith(".xls"):
+        doc_type = "xlsx"
+    elif ext.endswith(".doc") or ext.endswith(".docx"):
+        doc_type = "docx"
+    else:
+        doc_type = "unknown"
+
+    doc_hash = hashlib.md5(raw_bytes).hexdigest() if raw_bytes else ""
+    safe_text = escape_sql(extracted_text) if extracted_text else ""
+    text_len = len(extracted_text)
+    tables_count = len(tables_json) if tables_json else 0
+    native_tables = json.dumps(tables_json, ensure_ascii=False) if tables_json else "[]"
+
+    sql = (
+        "UPDATE exchange_filing:{fid} SET\n"
+        "  documentSize     = {size},\n"
+        "  documentType     = '{dtype}',\n"
+        "  documentHash     = '{dh}',\n"
+        "  documentText     = '{dt}',\n"
+        "  documentTextLen  = {dtl},\n"
+        "  documentTables   = {tables},\n"
+        "  documentTableCnt = {tcnt},\n"
+        "  documentStatus   = 'processed',\n"
+        "  updatedAt        = time::now()\n"
+        "RETURN NONE;\n"
+    ).format(
+        fid=fid,
+        size=size_bytes,
+        dtype=doc_type,
+        dh=doc_hash,
+        dt=safe_text,
+        dtl=text_len,
+        tables=native_tables,
+        tcnt=tables_count,
+    )
+    result = surreal_query(sql, timeout=60)
+    success = not (isinstance(result, dict) and result.get("error"))
+    if not success:
+        err = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
+        log(f"  Doc save failed for {fid}: {str(err)[:200]}")
+    return success
+
+
+def _mark_filing_status(fid: str, status: str, reason: str = "") -> bool:
+    """Mark a filing with a ``documentStatus`` (e.g. ``skipped``, ``failed``)."""
+    safe_reason = escape_sql(reason[:200]) if reason else ""
+    sql = (
+        "UPDATE exchange_filing:{fid} SET\n"
+        "  documentStatus = '{status}',\n"
+        "  documentStatusReason = '{reason}',\n"
+        "  updatedAt = time::now()\n"
+        "RETURN NONE;\n"
+    ).format(fid=fid, status=escape_sql(status), reason=safe_reason)
+    result = surreal_query(sql, timeout=30)
+    return not (isinstance(result, dict) and result.get("error"))
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: Metadata scrape
+# ---------------------------------------------------------------------------
+
+def run_phase1(
+    max_filings: int = 0,
+    dry_run: bool = False,
+    date_from: str = "",
+    date_to: str = "",
+    full_history: bool = False,
+) -> Tuple[int, set]:
+    """Scrape HKEx filings using the JSON API (no browser needed)."""
+    if not REQUESTS_AVAILABLE:
+        log("ERROR: 'requests' library not installed. Run: pip install requests")
+        return 0, set()
+
+    import requests as _requests
+
+    today = datetime.now()
+    if full_history:
+        dt_from = datetime(1999, 4, 1)
+        dt_to = today
+    elif date_from and date_to:
+        dt_from = datetime.strptime(date_from, "%d/%m/%Y")
+        dt_to = datetime.strptime(date_to, "%d/%m/%Y")
+    else:
+        dt_to = today
+        dt_from = datetime(today.year, today.month, today.day).replace(day=1)
+        if dt_from.month == 1:
+            dt_from = dt_from.replace(year=dt_from.year - 1, month=12)
+        else:
+            dt_from = dt_from.replace(month=dt_from.month - 1)
+
+    chunks = generate_monthly_chunks(dt_from, dt_to)
+
+    log("=" * 60)
+    log("PHASE 1: METADATA SCRAPE")
+    log("=" * 60)
+    log(f"Date range: {dt_from.strftime('%Y-%m-%d')} to {dt_to.strftime('%Y-%m-%d')}")
+    log(f"Monthly chunks: {len(chunks)}")
+    log(f"Max filings: {'unlimited' if max_filings <= 0 else max_filings}")
+    log("")
+
+    session = _requests.Session()
+    session.headers.update(
+        {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    )
+
+    all_filings: list = []
+    saved_ids: set[str] = set()
+    ingested_tickers: set[str] = set()
+
+    for chunk_idx, (chunk_from, chunk_to) in enumerate(chunks, 1):
+        if max_filings > 0 and len(saved_ids) >= max_filings:
+            log(f"Reached --limit {max_filings}, stopping.")
+            break
+
+        from_str = chunk_from.strftime("%Y%m%d")
+        to_str = chunk_to.strftime("%Y%m%d")
+        log(
+            f"--- CHUNK {chunk_idx}/{len(chunks)}: "
+            f"{chunk_from.strftime('%Y-%m-%d')} to {chunk_to.strftime('%Y-%m-%d')} ---"
+        )
+
+        remaining = 0
+        if max_filings > 0:
+            remaining = max_filings - len(saved_ids)
+
+        try:
+            chunk_filings = fetch_chunk_via_api(
+                session, from_str, to_str, max_records=remaining
+            )
+        except Exception as e:
+            log(f"  ERROR: {e}")
+            log("  Skipping chunk, will retry on next run.")
+            continue
+
+        chunk_new = 0
+        for f in chunk_filings:
+            fid = hashlib.md5(
+                f"{f['stockCode']}{f['date']}{f.get('title', '')}".encode()
+            ).hexdigest()[:16]
+            if fid not in saved_ids:
+                saved_ids.add(fid)
+                all_filings.append(f)
+                chunk_new += 1
+                raw_code = str(f["stockCode"]).lstrip("0") or "0"
+                ingested_tickers.add(f"{raw_code.zfill(4)}.HK")
+
+        log(
+            f"  Fetched {len(chunk_filings)} records, {chunk_new} new "
+            f"(total unique: {len(saved_ids)})"
+        )
+
+    log("")
+    log(f"Total unique filings fetched: {len(all_filings)}")
+
+    if not all_filings:
+        log("No filings to save.")
+        return 0, ingested_tickers
+
+    log("Saving filings to SurrealDB...")
+    total_saved = 0
+    SAVE_BATCH = 50
+    for i in range(0, len(all_filings), SAVE_BATCH):
+        batch = all_filings[i : i + SAVE_BATCH]
+        count = _save_filings_batch_metadata(batch, dry_run)
+        total_saved += count
+        if (i + SAVE_BATCH) % 500 == 0 or i + SAVE_BATCH >= len(all_filings):
+            log(
+                f"  Progress: {min(i + SAVE_BATCH, len(all_filings))}/{len(all_filings)} "
+                f"({total_saved} saved)"
+            )
+
+    log("")
+    log(f"Complete: {total_saved} filings saved to database ({len(saved_ids)} unique IDs)")
+    return total_saved, ingested_tickers
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Document backfill
+# ---------------------------------------------------------------------------
+
+def run_phase2(
+    batch_size: int = 50,
+    max_workers: int = MAX_DOWNLOAD_WORKERS,
+    limit: int = 0,
+) -> dict:
+    """Download and process documents for filings that have metadata but no document content."""
+    stats = {
+        "total_missing": 0,
+        "total_processed": 0,
+        "docs_downloaded": 0,
+        "texts_extracted": 0,
+        "tables_total": 0,
+        "skipped": 0,
+        "errors": 0,
+    }
+
+    log("=" * 60)
+    log("PHASE 2: DOCUMENT BACKFILL")
+    log("=" * 60)
+    log(f"Workers: {max_workers}, Batch size: {batch_size}, Limit: {limit or 'unlimited'}")
+    log("")
+
+    count_result = surreal_query(
+        "SELECT count() AS cnt FROM exchange_filing "
+        "WHERE documentStatus IS NONE "
+        "AND documentUrl IS NOT NONE "
+        "GROUP ALL;",
+        timeout=120,
+    )
+    total_missing = 0
+    if isinstance(count_result, list) and len(count_result) > 0:
+        r = count_result[0].get("result", [])
+        if r and isinstance(r, list) and len(r) > 0:
+            total_missing = r[0].get("cnt", 0)
+    stats["total_missing"] = total_missing
+    log(f"Filings needing processing: {total_missing}")
+
+    if total_missing == 0:
+        log("All filings already processed. Nothing to backfill.")
+        return stats
+
+    effective_limit = limit if limit > 0 else total_missing
+    batch_num = 0
+    consecutive_stalls = 0
+    MAX_STALLS = 3
+
+    while stats["total_processed"] < effective_limit:
+        batch_num += 1
+        remaining = effective_limit - stats["total_processed"]
+        this_batch = min(batch_size, remaining)
+
+        fetch_sql = (
+            f"SELECT id, filingId, documentUrl, filingDate FROM exchange_filing "
+            f"WHERE documentStatus IS NONE "
+            f"AND documentUrl IS NOT NONE "
+            f"ORDER BY filingDate DESC "
+            f"LIMIT {this_batch};"
+        )
+        result = surreal_query(fetch_sql, timeout=120)
+        filings: list = []
+        if isinstance(result, list) and len(result) > 0:
+            filings = result[0].get("result", [])
+        if not filings:
+            log(f"No more filings to process (batch {batch_num}).")
+            break
+
+        log(f"Batch {batch_num}: Processing {len(filings)} filings...")
+
+        download_tasks: list = []
+        for f in filings:
+            record_id = str(f.get("id", ""))
+            fid = record_id.split(":")[-1] if ":" in record_id else f.get("filingId", "")
+            doc_url = f.get("documentUrl", "")
+            if fid and doc_url:
+                download_tasks.append((fid, doc_url))
+            elif fid:
+                _mark_filing_status(fid, "skipped", "no_document_url")
+                stats["skipped"] += 1
+
+        if not download_tasks:
+            stats["total_processed"] += len(filings)
+            continue
+
+        # Download in parallel
+        downloaded_docs: list = []
+        batch_skipped = 0
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_download_worker, t): t for t in download_tasks}
+            for future in as_completed(futures):
+                try:
+                    fid, doc_url, raw_bytes, size_bytes, skip_reason = future.result()
+                    if raw_bytes:
+                        downloaded_docs.append((fid, doc_url, raw_bytes, size_bytes))
+                    else:
+                        _mark_filing_status(fid, "skipped", skip_reason or "download_failed")
+                        batch_skipped += 1
+                except Exception as e:
+                    stats["errors"] += 1
+                    log(f"  Download error: {e}")
+
+        stats["skipped"] += batch_skipped
+        log(f"  Downloaded: {len(downloaded_docs)}, Skipped: {batch_skipped}")
+
+        # Extract text/tables sequentially
+        batch_downloaded = 0
+        batch_texts = 0
+        batch_tables = 0
+        for fid, doc_url, raw_bytes, size_bytes in downloaded_docs:
+            extracted_text = ""
+            tables_json: list = []
+            try:
+                old_stderr = sys.stderr
+                sys.stderr = io.StringIO()
+                try:
+                    extracted_text, tables_json = extract_content_with_tables(
+                        raw_bytes, doc_url
+                    )
+                finally:
+                    sys.stderr = old_stderr
+            except Exception as e:
+                log(f"  Text extraction error for {fid}: {e}")
+
+            if _save_document_to_filing(
+                fid, raw_bytes, size_bytes, doc_url, extracted_text, tables_json
+            ):
+                batch_downloaded += 1
+                if extracted_text:
+                    batch_texts += 1
+                if tables_json:
+                    batch_tables += len(tables_json)
+            else:
+                _mark_filing_status(fid, "failed", "save_error")
+                stats["errors"] += 1
+
+        stats["docs_downloaded"] += batch_downloaded
+        stats["texts_extracted"] += batch_texts
+        stats["tables_total"] += batch_tables
+        stats["total_processed"] += len(filings)
+
+        log(
+            f"  Batch {batch_num}: {batch_downloaded} docs saved, "
+            f"{batch_texts} with text, {batch_tables} tables"
+        )
+
+        # Stall detection
+        batch_status_updates = batch_downloaded + batch_skipped
+        if batch_status_updates == 0:
+            consecutive_stalls += 1
+            log(
+                f"  WARNING: No filings updated in this batch "
+                f"(stall {consecutive_stalls}/{MAX_STALLS})"
+            )
+            if consecutive_stalls >= MAX_STALLS:
+                log(f"  BREAKING: {MAX_STALLS} consecutive stalls detected. Stopping.")
+                break
+        else:
+            consecutive_stalls = 0
+
+        pct = min(100, (stats["total_processed"] / total_missing) * 100)
+        log(f"  Progress: {stats['total_processed']}/{total_missing} ({pct:.1f}%)")
+
+    log("")
+    log("=" * 60)
+    log("BACKFILL COMPLETE")
+    log("=" * 60)
+    log(f"Total processed:  {stats['total_processed']}")
+    log(f"Docs downloaded:  {stats['docs_downloaded']}")
+    log(f"Texts extracted:  {stats['texts_extracted']}")
+    log(f"Tables extracted: {stats['tables_total']}")
+    log(f"Skipped:          {stats['skipped']}")
+    log(f"Errors:           {stats['errors']}")
+    return stats

@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hkex-filing-scraper"
+version = "1.0.0"
+description = "Scrape and ingest HKEx (Hong Kong Stock Exchange) regulatory filings into SurrealDB with full-text extraction and graph linking."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Simon Mak" },
+]
+keywords = ["hkex", "hong-kong", "filings", "scraper", "surrealdb", "graph-database", "financial-data"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Database",
+]
+
+dependencies = [
+    "requests>=2.28",
+    "beautifulsoup4>=4.11",
+]
+
+[project.optional-dependencies]
+pdf = ["PyMuPDF>=1.23"]
+excel = ["openpyxl>=3.1"]
+all = [
+    "PyMuPDF>=1.23",
+    "openpyxl>=3.1",
+    "python-dotenv>=1.0",
+]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+hkex-scraper = "hkex_scraper.main:main"
+
+[project.urls]
+Homepage = "https://github.com/simonmak/hkex-filing-scraper"
+Repository = "https://github.com/simonmak/hkex-filing-scraper"
+Issues = "https://github.com/simonmak/hkex-filing-scraper/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hkex_scraper"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
