@@ -1,14 +1,18 @@
 """Document text and table extraction for PDF, HTML, and Excel files.
 
 Outputs clean, structured Markdown suitable for LLM consumption and human reading.
-Uses pymupdf4llm for PDF extraction (headings, bold, tables, lists) and applies
-post-processing to remove page headers/footers, normalize bullets, and fix spacing.
+Uses pymupdf4llm for PDF text extraction (headings, bold, lists) and camelot-py
+for accurate table extraction (handles merged cells in HKEx regulatory forms).
+Applies post-processing to remove page headers/footers, normalize bullets, and
+fix spacing.
 """
 
 from __future__ import annotations
 
 import io
+import os
 import re
+import tempfile
 from typing import List, Tuple
 
 from .utils import log, squash_ws
@@ -33,6 +37,12 @@ except ImportError:
     PYMUPDF4LLM_AVAILABLE = False
 
 try:
+    import camelot  # type: ignore  # pip install camelot-py[cv]
+    CAMELOT_AVAILABLE = True
+except ImportError:
+    CAMELOT_AVAILABLE = False
+
+try:
     from bs4 import BeautifulSoup, Tag  # type: ignore  # pip install beautifulsoup4
     BS4_AVAILABLE = True
 except ImportError:
@@ -53,6 +63,9 @@ def check_dependencies() -> None:
     if not PYMUPDF4LLM_AVAILABLE:
         print("WARNING: pymupdf4llm not installed. PDF Markdown extraction degraded. "
               "Run: pip install pymupdf4llm")
+    if not CAMELOT_AVAILABLE:
+        print("WARNING: camelot-py not installed. PDF table extraction degraded "
+              "(merged cells may be duplicated). Run: pip install camelot-py[cv]")
     if not BS4_AVAILABLE:
         print("WARNING: beautifulsoup4 not installed. HTML text extraction disabled. "
               "Run: pip install beautifulsoup4")
@@ -77,10 +90,10 @@ _PAGE_FOOTERS = re.compile(
     re.MULTILINE | re.IGNORECASE,
 )
 
-# Bullet normalization: various bullet characters → standard "- "
+# Bullet normalization: various bullet characters -> standard "- "
 _BULLET_CHARS = re.compile(r"^[\s]*[•●○▪▸►◆◇→⇒➤]\s*", re.MULTILINE)
 
-# Numbered list normalization: "(1)" or "(a)" style → "1." or "a."
+# Numbered list normalization: "(1)" or "(a)" style -> "1." or "a."
 _PAREN_NUMBERS = re.compile(r"^\((\d+)\)\s*", re.MULTILINE)
 _PAREN_LETTERS = re.compile(r"^\(([a-z])\)\s*", re.MULTILINE)
 
@@ -189,29 +202,209 @@ def _extract_tables_from_md(md_text: str) -> List[dict]:
 
 
 # ---------------------------------------------------------------------------
-# PDF extraction (using pymupdf4llm for structured Markdown)
+# Camelot-based PDF table extraction (handles merged cells correctly)
+# ---------------------------------------------------------------------------
+
+def _extract_tables_with_camelot(raw_bytes: bytes) -> List[dict]:
+    """Extract tables from PDF bytes using camelot-py lattice mode.
+
+    Camelot's lattice mode detects tables by looking for cell borders/lines,
+    which is ideal for HKEx regulatory forms (FF301, FF305, etc.) that use
+    bordered tables with merged cells.
+
+    Returns a list of table dicts with headers, rows, accuracy, and Markdown.
+    Falls back to an empty list on any error.
+    """
+    if not CAMELOT_AVAILABLE:
+        return []
+
+    # Camelot requires a file path, so write to a temp file
+    fd, tmp_path = tempfile.mkstemp(suffix=".pdf")
+    try:
+        os.write(fd, raw_bytes)
+        os.close(fd)
+
+        tables = camelot.read_pdf(tmp_path, pages="all", flavor="lattice")
+        log(f"    Camelot extracted {len(tables)} tables (lattice mode)")
+
+        result: List[dict] = []
+        for idx, tbl in enumerate(tables, start=1):
+            df = tbl.df
+            if df.empty or df.shape[0] < 2:
+                continue
+
+            # First row is typically the header
+            raw_headers = [squash_ws(str(c)) for c in list(df.iloc[0])]
+
+            # Clean up empty headers — replace blanks with positional names
+            headers = []
+            for i, h in enumerate(raw_headers):
+                if h.strip():
+                    headers.append(h)
+                else:
+                    headers.append(f"Col{i + 1}")
+
+            # Data rows (skip header row)
+            data_rows: list = []
+            for row_idx in range(1, len(df)):
+                row = [squash_ws(str(c)) if str(c).strip() else "" for c in list(df.iloc[row_idx])]
+                # Skip rows that are completely empty
+                if any(cell.strip() for cell in row):
+                    data_rows.append(row)
+
+            if not data_rows:
+                continue
+
+            # Build Markdown table
+            md = _table_to_markdown(headers, data_rows)
+
+            result.append({
+                "tableIndex": idx,
+                "page": tbl.page,
+                "headers": headers,
+                "rowCount": len(data_rows),
+                "accuracy": round(tbl.accuracy, 1),
+                "markdown": md,
+            })
+
+        return result
+
+    except Exception as e:
+        log(f"    Camelot table extraction error: {e}")
+        return []
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# Table substitution: replace pymupdf4llm inline tables with camelot tables
+# ---------------------------------------------------------------------------
+
+def _strip_md_tables(md_text: str) -> Tuple[str, List[int]]:
+    """Remove all Markdown tables from text, returning cleaned text and
+    the character positions where tables were removed (for reinsertion).
+
+    A Markdown table is a consecutive block of lines starting with '|',
+    with at least 3 lines (header + separator + data).
+    """
+    lines = md_text.split("\n")
+    result_lines: List[str] = []
+    positions: List[int] = []  # char offset in result where each table was
+    i = 0
+    char_offset = 0
+
+    while i < len(lines):
+        if lines[i].strip().startswith("|"):
+            # Collect the full table block
+            table_start = i
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                i += 1
+            table_len = i - table_start
+            if table_len >= 3:
+                # This is a real table — record position and skip it
+                positions.append(char_offset)
+                # Add a placeholder blank line
+                result_lines.append("")
+                char_offset += 1  # for the newline
+            else:
+                # Too short to be a table — keep the lines
+                for j in range(table_start, i):
+                    result_lines.append(lines[j])
+                    char_offset += len(lines[j]) + 1
+        else:
+            result_lines.append(lines[i])
+            char_offset += len(lines[i]) + 1
+            i += 1
+
+    return "\n".join(result_lines), positions
+
+
+def _substitute_tables(md_text: str, camelot_tables: List[dict]) -> str:
+    """Replace pymupdf4llm inline tables in the Markdown text with cleaner
+    camelot tables.
+
+    Strategy:
+    1. Strip all existing Markdown tables from the text
+    2. Insert camelot tables at the positions where old tables were removed
+    3. If there are more camelot tables than positions, append extras at the end
+    4. If there are fewer camelot tables, some positions remain as blank lines
+    """
+    if not camelot_tables:
+        return md_text
+
+    stripped_text, positions = _strip_md_tables(md_text)
+
+    # Build camelot table Markdown blocks
+    camelot_mds = [t["markdown"] for t in camelot_tables if t.get("markdown")]
+
+    if not camelot_mds:
+        return md_text  # No camelot markdown to substitute
+
+    # Split the stripped text at placeholder positions and interleave camelot tables
+    lines = stripped_text.split("\n")
+    result_lines: List[str] = []
+    camelot_idx = 0
+    i = 0
+    pos_set = set()
+
+    # Map positions back to line numbers
+    char_offset = 0
+    for line_num, line in enumerate(lines):
+        if char_offset in positions:
+            pos_set.add(line_num)
+        char_offset += len(line) + 1
+
+    for line_num, line in enumerate(lines):
+        if line_num in pos_set and camelot_idx < len(camelot_mds):
+            # Insert camelot table here
+            result_lines.append("")  # blank line before table
+            result_lines.append(camelot_mds[camelot_idx])
+            result_lines.append("")  # blank line after table
+            camelot_idx += 1
+        else:
+            result_lines.append(line)
+
+    # Append any remaining camelot tables at the end
+    while camelot_idx < len(camelot_mds):
+        result_lines.append("")
+        result_lines.append(camelot_mds[camelot_idx])
+        result_lines.append("")
+        camelot_idx += 1
+
+    return "\n".join(result_lines)
+
+
+# ---------------------------------------------------------------------------
+# PDF extraction (pymupdf4llm for text + camelot for tables)
 # ---------------------------------------------------------------------------
 
 def extract_pdf_content(raw_bytes: bytes) -> Tuple[str, list]:
     """Extract text and structured tables from PDF bytes as clean Markdown.
 
-    Uses pymupdf4llm.to_markdown() for high-quality extraction that preserves
-    headings, bold/italic, tables, and lists. Falls back to basic PyMuPDF
-    text extraction if pymupdf4llm is not available.
+    Uses a two-pass approach:
+    1. pymupdf4llm.to_markdown() for high-quality text extraction that
+       preserves headings, bold/italic, and lists.
+    2. camelot-py (lattice mode) for accurate table extraction that
+       correctly handles merged cells in HKEx regulatory forms.
+
+    Falls back gracefully: pymupdf4llm -> basic PyMuPDF for text,
+    camelot -> pymupdf4llm inline tables for table extraction.
     """
     if not PYMUPDF_AVAILABLE:
         return "", []
 
     try:
+        # --- Pass 1: Text extraction via pymupdf4llm ---
         doc = pymupdf.open(stream=raw_bytes, filetype="pdf")
 
         if PYMUPDF4LLM_AVAILABLE:
-            # Use pymupdf4llm for structured Markdown extraction
             md_text = pymupdf4llm.to_markdown(doc)
             doc.close()
             log(f"    pymupdf4llm extracted {len(md_text)} chars")
         else:
-            # Fallback: basic text extraction with page separation
             pages_text: list = []
             for page in doc:
                 page_text = page.get_text("text") or ""
@@ -224,9 +417,24 @@ def extract_pdf_content(raw_bytes: bytes) -> Tuple[str, list]:
         # Post-process: clean headers/footers, normalize formatting
         md_text = _clean_markdown(md_text)
 
-        # Extract structured table metadata from the Markdown
-        tables_json = _extract_tables_from_md(md_text)
-        log(f"    Found {len(tables_json)} tables in PDF")
+        # --- Pass 2: Table extraction via camelot (preferred) ---
+        tables_json = _extract_tables_with_camelot(raw_bytes)
+
+        if tables_json:
+            log(f"    Using {len(tables_json)} camelot tables "
+                f"(accuracy: {', '.join(str(t['accuracy']) + '%' for t in tables_json)})")
+            # Substitute pymupdf4llm inline tables with cleaner camelot tables
+            md_text = _substitute_tables(md_text, tables_json)
+            md_text = _clean_markdown(md_text)  # Re-clean after substitution
+            log(f"    Substituted inline tables with camelot output")
+        else:
+            # Fallback: extract table metadata from pymupdf4llm Markdown
+            tables_json = _extract_tables_from_md(md_text)
+            if tables_json:
+                log(f"    Camelot unavailable/empty, using {len(tables_json)} "
+                    f"pymupdf4llm inline tables (may have merged-cell artifacts)")
+            else:
+                log(f"    No tables found in PDF")
 
         return md_text, tables_json
 
@@ -242,7 +450,7 @@ def extract_pdf_content(raw_bytes: bytes) -> Tuple[str, list]:
 def extract_html_content(raw_bytes: bytes) -> Tuple[str, list]:
     """Extract text and tables from HTML bytes as clean Markdown.
 
-    Preserves heading hierarchy (h1-h6 → # tags), converts HTML tables to
+    Preserves heading hierarchy (h1-h6 -> # tags), converts HTML tables to
     Markdown tables, and maintains paragraph structure. Avoids duplicate
     content from nested elements by tracking already-processed nodes.
     """
@@ -257,13 +465,9 @@ def extract_html_content(raw_bytes: bytes) -> Tuple[str, list]:
         for s in soup(["script", "style", "nav", "footer", "header", "noscript"]):
             s.decompose()
 
-        # Collect top-level content elements to avoid duplicate traversal.
-        # HKEx HTML filings are often table-based layouts where the entire
-        # page is wrapped in nested tables. We process tables separately
-        # and extract text from non-table elements.
         md_parts: list = []
         table_index = 0
-        processed_tables: set = set()  # Track processed table elements
+        processed_tables: set = set()
 
         root = soup.body if soup.body else soup
 
@@ -276,15 +480,15 @@ def extract_html_content(raw_bytes: bytes) -> Tuple[str, list]:
 
             tag = el.name
 
-            # Headings → Markdown headings
+            # Headings -> Markdown headings
             if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
                 level = int(tag[1])
                 heading_text = squash_ws(el.get_text())
                 if heading_text:
                     md_parts.append(f"\n\n{'#' * level} {heading_text}\n")
-                return  # Don't recurse into heading children
+                return
 
-            # Paragraphs → separated text blocks
+            # Paragraphs -> separated text blocks
             if tag == "p":
                 p_text = squash_ws(el.get_text())
                 if p_text:
@@ -304,22 +508,19 @@ def extract_html_content(raw_bytes: bytes) -> Tuple[str, list]:
                         md_parts.append(f"\n- {li_text}")
                 return
 
-            # Tables → Markdown tables (only process innermost data tables)
+            # Tables -> Markdown tables (only process innermost data tables)
             if tag == "table":
                 if id(el) in processed_tables:
                     return
                 processed_tables.add(id(el))
 
-                # Check if this is a layout table (contains other tables)
                 nested_tables = el.find_all("table")
                 if nested_tables:
-                    # Layout table — recurse into children instead
                     for child in el.children:
                         if isinstance(child, Tag):
                             _process_element(child)
                     return
 
-                # Data table — extract as Markdown table
                 table_index += 1
                 rows_data: list = []
                 headers: list = []
@@ -340,13 +541,12 @@ def extract_html_content(raw_bytes: bytes) -> Tuple[str, list]:
                             "markdown": md,
                         })
                 elif headers:
-                    # Single-row table (common in HKEx layouts) — extract as text
                     text = " | ".join(c for c in headers if c.strip())
                     if text:
                         md_parts.append(f"\n\n{text}\n")
                 return
 
-            # Container elements — recurse into children
+            # Container elements -> recurse into children
             if tag in ("div", "span", "td", "th", "tr", "tbody", "thead",
                        "tfoot", "section", "article", "main", "aside",
                        "ul", "ol", "dl", "dd", "dt", "figure",
@@ -425,7 +625,6 @@ def extract_excel_content(raw_bytes: bytes) -> Tuple[str, list]:
             )
 
             if is_kv:
-                # Format as key-value list
                 kv_lines: list = []
                 label_h = squash_ws(headers[0]) if headers[0].strip() else "Field"
                 value_h = squash_ws(headers[1]) if headers[1].strip() else "Value"
@@ -444,7 +643,6 @@ def extract_excel_content(raw_bytes: bytes) -> Tuple[str, list]:
                     "markdown": "\n".join(kv_lines),
                 })
             else:
-                # Standard table format
                 md = _table_to_markdown(headers, data_rows)
                 if md:
                     sheet_md += md
