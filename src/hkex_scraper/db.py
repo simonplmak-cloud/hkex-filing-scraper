@@ -122,7 +122,7 @@ DEFINE FIELD IF NOT EXISTS source         ON TABLE exchange_filing TYPE string;
 DEFINE FIELD IF NOT EXISTS updatedAt      ON TABLE exchange_filing TYPE datetime;
 
 -- Cross-reference fields
-DEFINE FIELD IF NOT EXISTS referencedTickers ON TABLE exchange_filing TYPE option<array>;
+DEFINE FIELD IF NOT EXISTS referencedTickers ON TABLE exchange_filing TYPE option<array<string>>;
 
 -- Document fields (text + metadata only; raw blobs are NOT stored)
 DEFINE FIELD IF NOT EXISTS documentSize         ON TABLE exchange_filing TYPE option<int>;
@@ -130,7 +130,14 @@ DEFINE FIELD IF NOT EXISTS documentType         ON TABLE exchange_filing TYPE op
 DEFINE FIELD IF NOT EXISTS documentHash         ON TABLE exchange_filing TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS documentText         ON TABLE exchange_filing TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS documentTextLen      ON TABLE exchange_filing TYPE option<int>;
-DEFINE FIELD IF NOT EXISTS documentTables       ON TABLE exchange_filing TYPE option<array>;
+DEFINE FIELD IF NOT EXISTS documentTables       ON TABLE exchange_filing TYPE option<array<object>>;
+DEFINE FIELD IF NOT EXISTS documentTables[*]             ON TABLE exchange_filing TYPE object;
+DEFINE FIELD IF NOT EXISTS documentTables[*].tableIndex  ON TABLE exchange_filing TYPE option<int>;
+DEFINE FIELD IF NOT EXISTS documentTables[*].sheetName   ON TABLE exchange_filing TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS documentTables[*].pageNumber  ON TABLE exchange_filing TYPE option<int>;
+DEFINE FIELD IF NOT EXISTS documentTables[*].headers     ON TABLE exchange_filing TYPE option<array<string>>;
+DEFINE FIELD IF NOT EXISTS documentTables[*].rowCount    ON TABLE exchange_filing TYPE option<int>;
+DEFINE FIELD IF NOT EXISTS documentTables[*].markdown    ON TABLE exchange_filing TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS documentTableCnt     ON TABLE exchange_filing TYPE option<int>;
 DEFINE FIELD IF NOT EXISTS documentStatus       ON TABLE exchange_filing TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS documentStatusReason ON TABLE exchange_filing TYPE option<string>;
