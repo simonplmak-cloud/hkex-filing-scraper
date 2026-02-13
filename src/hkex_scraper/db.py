@@ -58,6 +58,59 @@ def surreal_query(sql: str, timeout: int = 120) -> dict:
         return {"error": str(e)}
 
 
+def surreal_rpc(method: str, params: list, timeout: int = 120) -> dict:
+    """Send a JSON-RPC request to the ``/rpc`` endpoint.
+
+    The ``/rpc`` endpoint has a 4 MiB body limit (vs 1 MiB for ``/sql``),
+    and supports parameterised queries where large values are passed as
+    native JSON — no SQL string escaping needed.
+
+    Args:
+        method: RPC method name (e.g. ``'query'``, ``'merge'``, ``'update'``).
+        params: Positional parameters for the method.
+        timeout: Request timeout in seconds.
+
+    Returns:
+        Parsed JSON response dict, or ``{'error': '...'}`` on failure.
+    """
+    url = f"{SURREAL_ENDPOINT}/rpc"
+    auth = _get_auth_header()
+    payload = json.dumps(
+        {"id": 1, "method": method, "params": params},
+        ensure_ascii=False,
+    )
+    req = urllib.request.Request(
+        url,
+        data=payload.encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Basic {auth}",
+            "Surreal-NS": SURREAL_NS,
+            "Surreal-DB": SURREAL_DB,
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            # RPC responses have {id, result, error} format
+            if body.get("error"):
+                return {"error": str(body["error"])}
+            # Also check for ERR status inside the result array
+            # (query-level errors are returned as {result: [{status: "ERR", result: "..."}]})
+            results = body.get("result", [])
+            if isinstance(results, list):
+                for r in results:
+                    if isinstance(r, dict) and r.get("status") == "ERR":
+                        return {"error": str(r.get("result", "Unknown query error"))}
+            return body
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode("utf-8") if e.fp else ""
+        return {"error": f"HTTP {e.code}: {body_text[:500]}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ---------------------------------------------------------------------------
 # Batch upsert with binary-split retry
 # ---------------------------------------------------------------------------

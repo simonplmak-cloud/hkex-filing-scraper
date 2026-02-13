@@ -13,8 +13,8 @@ from datetime import datetime
 from typing import List, Tuple
 
 from .api import REQUESTS_AVAILABLE, fetch_chunk_via_api, generate_monthly_chunks
-from .config import HKEX_BASE_URL, MAX_DOWNLOAD_SIZE, MAX_DOWNLOAD_WORKERS, MAX_SQL_BODY_SIZE
-from .db import surreal_query, upsert_batch_with_retry
+from .config import HKEX_BASE_URL, MAX_DOWNLOAD_SIZE, MAX_DOWNLOAD_WORKERS, MAX_RPC_BODY_SIZE, MAX_SQL_BODY_SIZE
+from .db import surreal_query, surreal_rpc, upsert_batch_with_retry
 from .extractor import extract_content_with_tables
 from .utils import (
     classify_filing,
@@ -176,11 +176,14 @@ def _save_document_to_filing(
 ) -> Tuple[bool, str]:
     """Save extracted text + metadata to an existing filing record.
 
-    Proactively truncates the SQL payload to stay under the SurrealDB Cloud
-    ``/sql`` endpoint body limit (~1 MiB).  This prevents both HTTP 413
-    responses AND lower-level TCP connection resets (WinError 10053 /
-    ECONNRESET) that occur when the payload is so large the server drops
-    the connection before it can even return an error code.
+    Uses the SurrealDB ``/rpc`` endpoint with parameterised queries.  This
+    gives us a 4 MiB body limit (vs 1 MiB for ``/sql``) AND eliminates SQL
+    string escaping overhead entirely — document text and tables are passed
+    as native JSON values in the RPC vars, not embedded inside a SQL string
+    literal.
+
+    For the rare case where a document still exceeds the 4 MiB RPC limit,
+    we fall back to pre-truncation.
     """
     ext = doc_url.lower().split("?")[0].split("#")[0]
     if ext.endswith(".pdf"):
@@ -195,57 +198,62 @@ def _save_document_to_filing(
         doc_type = "unknown"
 
     doc_hash = hashlib.md5(raw_bytes).hexdigest() if raw_bytes else ""
-    tables_count = len(tables_json) if tables_json else 0
-    native_tables = json.dumps(tables_json, ensure_ascii=False) if tables_json else "[]"
-
-    # --- Pre-truncation: estimate SQL payload size and shrink BEFORE sending ---
-    # The SurrealDB Cloud /sql endpoint has a hard 1 MiB body limit.
-    # We target 900 KB to leave headroom for SQL boilerplate + escaping overhead.
-    SQL_OVERHEAD_ESTIMATE = 1024  # bytes for the UPDATE ... SET ... wrapper
-    tables_payload_size = len(native_tables.encode("utf-8"))
+    # Sanitise tables: strip None values from each table dict.
+    # SurrealDB SCHEMAFULL rejects JSON null for option<T> fields via /rpc,
+    # but accepts the field being omitted entirely.
+    tables_list = [
+        {k: v for k, v in tbl.items() if v is not None}
+        for tbl in (tables_json or [])
+    ]
+    tables_count = len(tables_list)
+    original_text_len = len(extracted_text)
     text_to_save = extracted_text
     was_truncated = False
-    original_text_len = len(extracted_text)
 
-    # Estimate total payload: escaped text + tables JSON + SQL overhead
-    # escape_sql can expand text (backslash doubling, quote escaping) so we
-    # use a 1.1x safety multiplier on text size.
-    estimated_text_bytes = int(len(text_to_save) * 1.1)
-    estimated_total = estimated_text_bytes + tables_payload_size + SQL_OVERHEAD_ESTIMATE
+    # --- Pre-truncation: estimate JSON-RPC payload size ---
+    # The /rpc endpoint has a 4 MiB body limit.  The payload is a JSON object
+    # containing the SQL template + vars (text, tables, etc.).
+    # No SQL escaping overhead — text is a native JSON string value.
+    # JSON string escaping adds ~2-5% for typical text (quotes, backslashes,
+    # control chars become \uXXXX).  We use a 1.05x safety multiplier.
+    RPC_OVERHEAD = 2048  # bytes for the JSON-RPC wrapper + SQL template
+    tables_json_str = json.dumps(tables_list, ensure_ascii=False)
+    tables_bytes = len(tables_json_str.encode("utf-8"))
+    text_bytes_est = int(len(text_to_save.encode("utf-8")) * 1.05)
+    estimated_total = text_bytes_est + tables_bytes + RPC_OVERHEAD
 
-    if estimated_total > MAX_SQL_BODY_SIZE:
-        # First: try truncating text only (keep all tables)
-        available_for_text = MAX_SQL_BODY_SIZE - tables_payload_size - SQL_OVERHEAD_ESTIMATE
-        if available_for_text > 50_000:  # at least 50 KB of text is useful
-            target_chars = int(available_for_text / 1.1)  # reverse the safety multiplier
+    if estimated_total > MAX_RPC_BODY_SIZE:
+        # Try truncating text only first (keep all tables)
+        available_for_text = MAX_RPC_BODY_SIZE - tables_bytes - RPC_OVERHEAD
+        if available_for_text > 100_000:  # at least 100 KB of text is useful
+            target_chars = int(available_for_text / 1.05)
             text_to_save = extracted_text[:target_chars]
-            # Trim to last complete line
             last_nl = text_to_save.rfind("\n")
             if last_nl > target_chars // 2:
                 text_to_save = text_to_save[:last_nl]
             was_truncated = True
             log(
                 f"  Pre-truncated text for {fid}: {original_text_len} -> {len(text_to_save)} chars "
-                f"(tables: {tables_payload_size} bytes, {tables_count} tables kept)"
+                f"(tables: {tables_bytes} bytes, {tables_count} tables kept)"
             )
         else:
-            # Tables JSON alone is too large — truncate tables too
-            # Keep only the first N tables that fit in ~200 KB
-            max_tables_bytes = 200 * 1024
+            # Tables alone are too large — trim tables to ~1 MB, then truncate text
+            max_tables_bytes = 1_000_000
             kept_tables: list = []
             running_size = 2  # for '[]'
-            for tbl in tables_json or []:
+            for tbl in tables_list:
                 tbl_json = json.dumps(tbl, ensure_ascii=False)
                 if running_size + len(tbl_json.encode("utf-8")) + 2 > max_tables_bytes:
                     break
                 kept_tables.append(tbl)
-                running_size += len(tbl_json.encode("utf-8")) + 2  # +2 for comma+space
-            native_tables = json.dumps(kept_tables, ensure_ascii=False)
-            tables_payload_size = len(native_tables.encode("utf-8"))
-            tables_count = len(kept_tables)
+                running_size += len(tbl_json.encode("utf-8")) + 2
+            tables_list = kept_tables
+            tables_json_str = json.dumps(tables_list, ensure_ascii=False)
+            tables_bytes = len(tables_json_str.encode("utf-8"))
+            tables_count = len(tables_list)
 
-            available_for_text = MAX_SQL_BODY_SIZE - tables_payload_size - SQL_OVERHEAD_ESTIMATE
-            target_chars = max(int(available_for_text / 1.1), 50_000)
+            available_for_text = MAX_RPC_BODY_SIZE - tables_bytes - RPC_OVERHEAD
+            target_chars = max(int(available_for_text / 1.05), 100_000)
             text_to_save = extracted_text[:target_chars]
             last_nl = text_to_save.rfind("\n")
             if last_nl > target_chars // 2:
@@ -257,51 +265,50 @@ def _save_document_to_filing(
                 f"tables {len(tables_json or [])} -> {tables_count}"
             )
 
-    def _build_save_sql(
-        text: str,
-        tables_str: str,
-        tbl_count: int,
-        status: str = "processed",
-        truncated: bool = False,
-    ) -> str:
-        safe_text = escape_sql(text) if text else ""
-        text_len = len(text)
-        reason = f"truncated_from_{original_text_len}" if truncated else ""
-        return (
-            "UPDATE exchange_filing:{fid} SET\n"
-            "  documentSize     = {size},\n"
-            "  documentType     = '{dtype}',\n"
-            "  documentHash     = '{dh}',\n"
-            "  documentText     = '{dt}',\n"
-            "  documentTextLen  = {dtl},\n"
-            "  documentTables   = {tables},\n"
-            "  documentTableCnt = {tcnt},\n"
-            "  documentStatus   = '{status}',\n"
-            "  documentStatusReason = '{reason}',\n"
-            "  updatedAt        = time::now()\n"
-            "RETURN NONE;\n"
-        ).format(
-            fid=fid,
-            size=size_bytes,
-            dtype=doc_type,
-            dh=doc_hash,
-            dt=safe_text,
-            dtl=text_len,
-            tables=tables_str,
-            tcnt=tbl_count,
-            status=status,
-            reason=reason,
-        )
+    # --- Build the parameterised RPC query ---
+    # The SQL uses $variables which are bound to the vars dict.
+    # This means text and tables are NEVER embedded in the SQL string.
+    # The filing ID is embedded directly in the SQL (it's small and safe).
+    # Only the large payloads (text, tables) are parameterised via $vars.
+    # Note: type::thing('exchange_filing', $fid) requires $fid to be an int,
+    # but our IDs are numeric strings — so we use the direct record syntax.
+    sql_template = (
+        f"UPDATE exchange_filing:{fid} SET "
+        "documentSize = $doc_size, "
+        "documentType = $doc_type, "
+        "documentHash = $doc_hash, "
+        "documentText = $doc_text, "
+        "documentTextLen = $doc_text_len, "
+        "documentTables = $doc_tables, "
+        "documentTableCnt = $doc_table_cnt, "
+        "documentStatus = $doc_status, "
+        "documentStatusReason = $doc_reason, "
+        "updatedAt = time::now() "
+        "RETURN NONE;"
+    )
 
-    def _is_413(result: dict) -> bool:
+    status = "processed"
+    reason = f"truncated_from_{original_text_len}" if was_truncated else ""
+
+    vars_dict = {
+        "doc_size": size_bytes,
+        "doc_type": doc_type,
+        "doc_hash": doc_hash,
+        "doc_text": text_to_save,
+        "doc_text_len": len(text_to_save),
+        "doc_tables": tables_list,
+        "doc_table_cnt": tables_count,
+        "doc_status": status,
+        "doc_reason": reason,
+    }
+
+    def _is_body_too_large(result: dict) -> bool:
         """Detect body-too-large errors including connection resets."""
         if not isinstance(result, dict):
             return False
         err = str(result.get("error", ""))
-        # Explicit HTTP 413
         if "413" in err:
             return True
-        # TCP-level connection resets caused by oversized payloads
         if any(
             sig in err
             for sig in [
@@ -312,55 +319,45 @@ def _save_document_to_filing(
             return True
         return False
 
-    # --- First attempt ---
-    sql = _build_save_sql(text_to_save, native_tables, tables_count, truncated=was_truncated)
-    # Final safety check on actual encoded size
-    actual_size = len(sql.encode("utf-8"))
-    if actual_size > 1_048_576:  # 1 MiB hard limit
-        # Emergency truncation — cut text more aggressively
-        emergency_target = int(len(text_to_save) * (MAX_SQL_BODY_SIZE / actual_size) * 0.85)
-        text_to_save = text_to_save[:emergency_target]
-        last_nl = text_to_save.rfind("\n")
-        if last_nl > emergency_target // 2:
-            text_to_save = text_to_save[:last_nl]
-        was_truncated = True
-        log(f"  Emergency re-truncation for {fid}: -> {len(text_to_save)} chars (SQL was {actual_size} bytes)")
-        sql = _build_save_sql(text_to_save, native_tables, tables_count, truncated=True)
-
-    result = surreal_query(sql, timeout=60)
+    # --- First attempt via /rpc ---
+    result = surreal_rpc("query", [sql_template, vars_dict], timeout=120)
     if not (isinstance(result, dict) and result.get("error")):
         return True, ""  # success
 
     err = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
 
-    # --- 413 / connection-reset detected: retry with more aggressive truncation ---
-    if _is_413(result):
-        # Cut to 500 KB of text, drop tables entirely
-        fallback_limit = 500 * 1024
-        truncated_text = extracted_text[:fallback_limit]
+    # --- Body-too-large fallback: truncate aggressively and retry via /rpc ---
+    if _is_body_too_large(result):
+        fallback_text_limit = 2_000_000  # ~2M chars should fit easily in 4 MiB
+        truncated_text = extracted_text[:fallback_text_limit]
         last_nl = truncated_text.rfind("\n")
-        if last_nl > fallback_limit // 2:
+        if last_nl > fallback_text_limit // 2:
             truncated_text = truncated_text[:last_nl]
         log(
-            f"  Payload too large for {fid} ({str(err)[:80]}): "
+            f"  RPC payload too large for {fid} ({str(err)[:80]}): "
             f"retrying with {len(truncated_text)} chars, no tables"
         )
 
-        sql_retry = _build_save_sql(truncated_text, "[]", 0, truncated=True)
-        result_retry = surreal_query(sql_retry, timeout=60)
+        vars_dict["doc_text"] = truncated_text
+        vars_dict["doc_text_len"] = len(truncated_text)
+        vars_dict["doc_tables"] = []
+        vars_dict["doc_table_cnt"] = 0
+        vars_dict["doc_status"] = "processed"
+        vars_dict["doc_reason"] = f"truncated_from_{original_text_len}"
+
+        result_retry = surreal_rpc("query", [sql_template, vars_dict], timeout=120)
         if not (isinstance(result_retry, dict) and result_retry.get("error")):
             return True, ""  # success with truncation
 
-        # Truncation retry also failed
         retry_err = (
             result_retry.get("error", "unknown")
             if isinstance(result_retry, dict)
             else "unknown"
         )
-        log(f"  Doc save failed for {fid} even after truncation: {str(retry_err)[:200]}")
-        return False, "http_413_truncation_failed"
+        log(f"  Doc save failed for {fid} even after RPC truncation: {str(retry_err)[:200]}")
+        return False, "rpc_body_too_large_truncation_failed"
 
-    # --- Non-413 error ---
+    # --- Non-size error ---
     log(f"  Doc save failed for {fid}: {str(err)[:200]}")
     error_code = f"save_error:{str(err)[:100]}"
     return False, error_code
