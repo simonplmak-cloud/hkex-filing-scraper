@@ -174,7 +174,14 @@ def _save_document_to_filing(
     extracted_text: str = "",
     tables_json: list | None = None,
 ) -> Tuple[bool, str]:
-    """Save extracted text + metadata to an existing filing record."""
+    """Save extracted text + metadata to an existing filing record.
+
+    Proactively truncates the SQL payload to stay under the SurrealDB Cloud
+    ``/sql`` endpoint body limit (~1 MiB).  This prevents both HTTP 413
+    responses AND lower-level TCP connection resets (WinError 10053 /
+    ECONNRESET) that occur when the payload is so large the server drops
+    the connection before it can even return an error code.
+    """
     ext = doc_url.lower().split("?")[0].split("#")[0]
     if ext.endswith(".pdf"):
         doc_type = "pdf"
@@ -191,9 +198,75 @@ def _save_document_to_filing(
     tables_count = len(tables_json) if tables_json else 0
     native_tables = json.dumps(tables_json, ensure_ascii=False) if tables_json else "[]"
 
-    def _build_save_sql(text: str, status: str = "processed", truncated: bool = False) -> str:
+    # --- Pre-truncation: estimate SQL payload size and shrink BEFORE sending ---
+    # The SurrealDB Cloud /sql endpoint has a hard 1 MiB body limit.
+    # We target 900 KB to leave headroom for SQL boilerplate + escaping overhead.
+    SQL_OVERHEAD_ESTIMATE = 1024  # bytes for the UPDATE ... SET ... wrapper
+    tables_payload_size = len(native_tables.encode("utf-8"))
+    text_to_save = extracted_text
+    was_truncated = False
+    original_text_len = len(extracted_text)
+
+    # Estimate total payload: escaped text + tables JSON + SQL overhead
+    # escape_sql can expand text (backslash doubling, quote escaping) so we
+    # use a 1.1x safety multiplier on text size.
+    estimated_text_bytes = int(len(text_to_save) * 1.1)
+    estimated_total = estimated_text_bytes + tables_payload_size + SQL_OVERHEAD_ESTIMATE
+
+    if estimated_total > MAX_SQL_BODY_SIZE:
+        # First: try truncating text only (keep all tables)
+        available_for_text = MAX_SQL_BODY_SIZE - tables_payload_size - SQL_OVERHEAD_ESTIMATE
+        if available_for_text > 50_000:  # at least 50 KB of text is useful
+            target_chars = int(available_for_text / 1.1)  # reverse the safety multiplier
+            text_to_save = extracted_text[:target_chars]
+            # Trim to last complete line
+            last_nl = text_to_save.rfind("\n")
+            if last_nl > target_chars // 2:
+                text_to_save = text_to_save[:last_nl]
+            was_truncated = True
+            log(
+                f"  Pre-truncated text for {fid}: {original_text_len} -> {len(text_to_save)} chars "
+                f"(tables: {tables_payload_size} bytes, {tables_count} tables kept)"
+            )
+        else:
+            # Tables JSON alone is too large — truncate tables too
+            # Keep only the first N tables that fit in ~200 KB
+            max_tables_bytes = 200 * 1024
+            kept_tables: list = []
+            running_size = 2  # for '[]'
+            for tbl in tables_json or []:
+                tbl_json = json.dumps(tbl, ensure_ascii=False)
+                if running_size + len(tbl_json.encode("utf-8")) + 2 > max_tables_bytes:
+                    break
+                kept_tables.append(tbl)
+                running_size += len(tbl_json.encode("utf-8")) + 2  # +2 for comma+space
+            native_tables = json.dumps(kept_tables, ensure_ascii=False)
+            tables_payload_size = len(native_tables.encode("utf-8"))
+            tables_count = len(kept_tables)
+
+            available_for_text = MAX_SQL_BODY_SIZE - tables_payload_size - SQL_OVERHEAD_ESTIMATE
+            target_chars = max(int(available_for_text / 1.1), 50_000)
+            text_to_save = extracted_text[:target_chars]
+            last_nl = text_to_save.rfind("\n")
+            if last_nl > target_chars // 2:
+                text_to_save = text_to_save[:last_nl]
+            was_truncated = True
+            log(
+                f"  Pre-truncated text+tables for {fid}: "
+                f"text {original_text_len} -> {len(text_to_save)} chars, "
+                f"tables {len(tables_json or [])} -> {tables_count}"
+            )
+
+    def _build_save_sql(
+        text: str,
+        tables_str: str,
+        tbl_count: int,
+        status: str = "processed",
+        truncated: bool = False,
+    ) -> str:
         safe_text = escape_sql(text) if text else ""
         text_len = len(text)
+        reason = f"truncated_from_{original_text_len}" if truncated else ""
         return (
             "UPDATE exchange_filing:{fid} SET\n"
             "  documentSize     = {size},\n"
@@ -214,37 +287,66 @@ def _save_document_to_filing(
             dh=doc_hash,
             dt=safe_text,
             dtl=text_len,
-            tables=native_tables,
-            tcnt=tables_count,
+            tables=tables_str,
+            tcnt=tbl_count,
             status=status,
-            reason=f"truncated_from_{len(extracted_text)}" if truncated else "",
+            reason=reason,
         )
 
     def _is_413(result: dict) -> bool:
-        err = result.get("error", "") if isinstance(result, dict) else ""
-        return "413" in str(err)
+        """Detect body-too-large errors including connection resets."""
+        if not isinstance(result, dict):
+            return False
+        err = str(result.get("error", ""))
+        # Explicit HTTP 413
+        if "413" in err:
+            return True
+        # TCP-level connection resets caused by oversized payloads
+        if any(
+            sig in err
+            for sig in [
+                "10053", "10054", "ECONNRESET", "Connection aborted",
+                "Connection reset", "RemoteDisconnected", "BrokenPipeError",
+            ]
+        ):
+            return True
+        return False
 
-    # --- First attempt: full text ---
-    sql = _build_save_sql(extracted_text)
+    # --- First attempt ---
+    sql = _build_save_sql(text_to_save, native_tables, tables_count, truncated=was_truncated)
+    # Final safety check on actual encoded size
+    actual_size = len(sql.encode("utf-8"))
+    if actual_size > 1_048_576:  # 1 MiB hard limit
+        # Emergency truncation — cut text more aggressively
+        emergency_target = int(len(text_to_save) * (MAX_SQL_BODY_SIZE / actual_size) * 0.85)
+        text_to_save = text_to_save[:emergency_target]
+        last_nl = text_to_save.rfind("\n")
+        if last_nl > emergency_target // 2:
+            text_to_save = text_to_save[:last_nl]
+        was_truncated = True
+        log(f"  Emergency re-truncation for {fid}: -> {len(text_to_save)} chars (SQL was {actual_size} bytes)")
+        sql = _build_save_sql(text_to_save, native_tables, tables_count, truncated=True)
+
     result = surreal_query(sql, timeout=60)
     if not (isinstance(result, dict) and result.get("error")):
         return True, ""  # success
 
     err = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
 
-    # --- 413 detected: retry with truncated text ---
+    # --- 413 / connection-reset detected: retry with more aggressive truncation ---
     if _is_413(result):
-        truncated_text = extracted_text[:MAX_SQL_BODY_SIZE]
-        # Trim to last complete line to avoid mid-word cuts
-        last_newline = truncated_text.rfind("\n")
-        if last_newline > MAX_SQL_BODY_SIZE // 2:
-            truncated_text = truncated_text[:last_newline]
+        # Cut to 500 KB of text, drop tables entirely
+        fallback_limit = 500 * 1024
+        truncated_text = extracted_text[:fallback_limit]
+        last_nl = truncated_text.rfind("\n")
+        if last_nl > fallback_limit // 2:
+            truncated_text = truncated_text[:last_nl]
         log(
-            f"  413 for {fid}: text too large ({len(extracted_text)} chars), "
-            f"retrying with truncated ({len(truncated_text)} chars)"
+            f"  Payload too large for {fid} ({str(err)[:80]}): "
+            f"retrying with {len(truncated_text)} chars, no tables"
         )
 
-        sql_retry = _build_save_sql(truncated_text, status="processed", truncated=True)
+        sql_retry = _build_save_sql(truncated_text, "[]", 0, truncated=True)
         result_retry = surreal_query(sql_retry, timeout=60)
         if not (isinstance(result_retry, dict) and result_retry.get("error")):
             return True, ""  # success with truncation
