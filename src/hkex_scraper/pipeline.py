@@ -319,12 +319,100 @@ def _save_document_to_filing(
             return True
         return False
 
+    def _is_record_link_error(result: dict) -> bool:
+        """Detect SurrealDB record-link misinterpretation errors.
+
+        The /rpc endpoint parses JSON string values matching ``word:word``
+        as record links instead of plain strings.  When this happens the
+        error message contains phrases like ``expected a option<string>``
+        or ``expected a option<array<string>>``.
+        """
+        if not isinstance(result, dict):
+            return False
+        err = str(result.get("error", ""))
+        return "expected a option<" in err
+
+    def _save_via_sql(text: str, tables: list, status_val: str, reason_val: str) -> Tuple[bool, str]:
+        """Fallback: save via the ``/sql`` endpoint with SQL-escaped strings.
+
+        The ``/sql`` endpoint embeds values inside SQL string literals, which
+        avoids the record-link misinterpretation bug in ``/rpc``.  The trade-off
+        is a 1 MiB body limit and SQL-escaping overhead.
+        """
+        tables_json_str = json.dumps(tables, ensure_ascii=False)
+        escaped_text = escape_sql(text)
+        escaped_tables = escape_sql(tables_json_str)
+        escaped_hash = escape_sql(doc_hash)
+        escaped_reason = escape_sql(reason_val)
+
+        sql = (
+            f"UPDATE exchange_filing:{fid} SET "
+            f"documentSize = {size_bytes}, "
+            f"documentType = '{escape_sql(doc_type)}', "
+            f"documentHash = '{escaped_hash}', "
+            f"documentText = '{escaped_text}', "
+            f"documentTextLen = {len(text)}, "
+            f"documentTables = {tables_json_str}, "
+            f"documentTableCnt = {len(tables)}, "
+            f"documentStatus = '{escape_sql(status_val)}', "
+            f"documentStatusReason = '{escaped_reason}', "
+            f"updatedAt = time::now() "
+            f"RETURN NONE;"
+        )
+
+        sql_bytes = len(sql.encode("utf-8"))
+        if sql_bytes > MAX_SQL_BODY_SIZE:
+            # Truncate text to fit within /sql 1 MiB limit
+            overhead = sql_bytes - len(escaped_text.encode("utf-8"))
+            budget = MAX_SQL_BODY_SIZE - overhead - 4096  # safety margin
+            trunc_text = text[:max(budget, 50_000)]
+            last_nl = trunc_text.rfind("\n")
+            if last_nl > len(trunc_text) // 2:
+                trunc_text = trunc_text[:last_nl]
+            escaped_trunc = escape_sql(trunc_text)
+            sql = (
+                f"UPDATE exchange_filing:{fid} SET "
+                f"documentSize = {size_bytes}, "
+                f"documentType = '{escape_sql(doc_type)}', "
+                f"documentHash = '{escaped_hash}', "
+                f"documentText = '{escaped_trunc}', "
+                f"documentTextLen = {len(trunc_text)}, "
+                f"documentTables = [], "
+                f"documentTableCnt = 0, "
+                f"documentStatus = 'processed', "
+                f"documentStatusReason = 'sql_fallback_truncated_from_{len(text)}', "
+                f"updatedAt = time::now() "
+                f"RETURN NONE;"
+            )
+            log(
+                f"  /sql fallback truncated text for {fid}: "
+                f"{len(text)} -> {len(trunc_text)} chars, no tables"
+            )
+
+        sql_result = surreal_query(sql, timeout=120)
+        if isinstance(sql_result, list):
+            for r in sql_result:
+                if isinstance(r, dict) and r.get("status") == "ERR":
+                    log(f"  /sql fallback failed for {fid}: {str(r.get('result', ''))[:200]}")
+                    return False, f"sql_fallback_error:{str(r.get('result', ''))[:100]}"
+            return True, ""
+        log(f"  /sql fallback failed for {fid}: {str(sql_result)[:200]}")
+        return False, "sql_fallback_error"
+
     # --- First attempt via /rpc ---
     result = surreal_rpc("query", [sql_template, vars_dict], timeout=120)
     if not (isinstance(result, dict) and result.get("error")):
         return True, ""  # success
 
     err = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
+
+    # --- Record-link fallback: retry via /sql (avoids the colon-parsing bug) ---
+    if _is_record_link_error(result):
+        log(
+            f"  RPC record-link error for {fid} ({str(err)[:80]}): "
+            f"retrying via /sql endpoint"
+        )
+        return _save_via_sql(text_to_save, tables_list, status, reason)
 
     # --- Body-too-large fallback: truncate aggressively and retry via /rpc ---
     if _is_body_too_large(result):
