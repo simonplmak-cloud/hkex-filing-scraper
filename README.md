@@ -1,6 +1,11 @@
 # HKEx Filing Scraper
 
+![HKEx Filing Scraper](docs/social_preview.png)
+
 [![PyPI version](https://badge.fury.io/py/hkex-filing-scraper.svg)](https://badge.fury.io/py/hkex-filing-scraper)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![SurrealDB](https://img.shields.io/badge/SurrealDB-FF00A0?logo=surrealdb&logoColor=white)](https://surrealdb.com)
 
 Open-source tool to scrape and ingest HKEx (Hong Kong Stock Exchange) regulatory filings into a SurrealDB database. It includes full-text extraction from PDF/HTML/Excel documents and optional graph linking between companies and filings.
 
