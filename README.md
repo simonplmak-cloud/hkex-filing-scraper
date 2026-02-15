@@ -2,7 +2,7 @@
 
 ![HKEx Filing Scraper](docs/social_preview.png)
 
-[![PyPI version](https://badge.fury.io/py/hkex-filing-scraper.svg)](https://badge.fury.io/py/hkex-filing-scraper)
+[![GitHub Release](https://img.shields.io/github/v/release/simonplmak-cloud/hkex-filing-scraper?color=green)](https://github.com/simonplmak-cloud/hkex-filing-scraper/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![SurrealDB](https://img.shields.io/badge/SurrealDB-FF00A0?logo=surrealdb&logoColor=white)](https://surrealdb.com)
@@ -22,16 +22,18 @@ This tool uses the undocumented HKEx JSON API, which is significantly faster and
 
 ## Installation
 
-The tool is available on PyPI and can be installed with `pip`:
+Clone the repository and install with `pip`:
 
 ```bash
-pip install hkex-filing-scraper
+git clone https://github.com/simonplmak-cloud/hkex-filing-scraper.git
+cd hkex-filing-scraper
+pip install ".[all]"
 ```
 
-For full document processing capabilities (PDF, Excel), install the `all` extras:
+The `[all]` extras include PDF extraction (PyMuPDF, Camelot), Excel parsing (openpyxl), and environment variable loading (python-dotenv). For a minimal install without document processing:
 
 ```bash
-pip install "hkex-filing-scraper[all]"
+pip install .
 ```
 
 ## Configuration
