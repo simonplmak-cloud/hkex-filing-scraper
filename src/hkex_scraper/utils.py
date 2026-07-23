@@ -133,29 +133,33 @@ def extract_issuer_name(title: str) -> str:
 # Filing classification
 # ---------------------------------------------------------------------------
 def classify_filing(title: str) -> Tuple[str, str]:
-    """Classify a filing by its title into (type_code, subtype_label)."""
+    """Classify a filing by its title into (canonical_type, subtype_label).
+
+    The canonical type uses the human-readable label vocabulary from the
+    data model (see specs/surrealdb-etl-modernization/data-model.md §2).
+    """
     t = (title or "").upper()
     if "ANNUAL REPORT" in t:
-        return ("ANNUAL_REPORT", "Annual Report")
+        return ("Annual Report", "Annual Report")
     if "ANNUAL RESULTS" in t:
-        return ("RESULTS", "Annual Results")
+        return ("Annual Results", "Annual Results")
     if "INTERIM REPORT" in t:
-        return ("RESULTS", "Interim Report")
+        return ("Interim Report", "Interim Report")
     if "INTERIM RESULTS" in t:
-        return ("RESULTS", "Interim Results")
+        return ("Interim Results", "Interim Results")
     if "QUARTERLY" in t:
-        return ("RESULTS", "Quarterly")
+        return ("Quarterly", "Quarterly")
     if "DIVIDEND" in t:
-        return ("DIVIDEND", "Dividend")
+        return ("Dividend", "Dividend")
     if "TRANSACTION" in t or "ACQUISITION" in t:
-        return ("TRANSACTION", "Transaction")
+        return ("Transaction", "Transaction")
     if "DIRECTOR" in t:
-        return ("DIRECTOR", "Director")
+        return ("Director", "Director")
     if "CIRCULAR" in t:
-        return ("CIRCULAR", "Circular")
+        return ("Circular", "Circular")
     if "MEETING" in t or "AGM" in t:
-        return ("MEETING", "Meeting")
-    return ("OTHER", "Announcement")
+        return ("Meeting", "Meeting")
+    return ("Other", "Announcement")
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 """Unit tests for hkex_scraper.utils — no database or network required."""
 
+from hkex_scraper.graph import _normalize_company_id, _ticker_to_record_id
 from hkex_scraper.utils import (
     classify_filing,
     escape_sql,
@@ -32,16 +33,31 @@ class TestEscapeSql:
 
 class TestClassifyFiling:
     def test_annual_report(self):
-        assert classify_filing("Annual Report 2024")[0] == "ANNUAL_REPORT"
+        assert classify_filing("Annual Report 2024")[0] == "Annual Report"
 
     def test_interim_results(self):
-        assert classify_filing("Interim Results Announcement")[0] == "RESULTS"
+        assert classify_filing("Interim Results Announcement")[0] == "Interim Results"
 
     def test_dividend(self):
-        assert classify_filing("Payment of Dividend")[0] == "DIVIDEND"
+        assert classify_filing("Payment of Dividend")[0] == "Dividend"
 
     def test_other(self):
-        assert classify_filing("Some random announcement")[0] == "OTHER"
+        assert classify_filing("Some random announcement")[0] == "Other"
+
+    def test_quarterly(self):
+        assert classify_filing("Quarterly Report Q1 2025")[0] == "Quarterly"
+
+    def test_meeting(self):
+        assert classify_filing("Notice of Annual General Meeting")[0] == "Meeting"
+
+    def test_transaction(self):
+        assert classify_filing("Connected Transaction Announcement")[0] == "Transaction"
+
+    def test_director(self):
+        assert classify_filing("Change of Director")[0] == "Director"
+
+    def test_circular(self):
+        assert classify_filing("Proxy Form Circular")[0] == "Circular"
 
 
 class TestExtractReferencedTickers:
@@ -67,3 +83,37 @@ class TestExtractReferencedTickers:
         title = "Annual Report 2024"
         result = extract_referenced_tickers(title, "0001")
         assert result == []
+
+
+class TestCompanyIdNormalization:
+    def test_strips_leading_zeros(self):
+        assert _ticker_to_record_id("0001.HK") == "1_HK"
+
+    def test_six_digit_unpadded(self):
+        assert _ticker_to_record_id("000426.HK") == "426_HK"
+
+    def test_no_leading_zeros_unchanged(self):
+        assert _ticker_to_record_id("2378.HK") == "2378_HK"
+
+    def test_non_hk_exchange(self):
+        assert _ticker_to_record_id("AAPL.US") == "AAPL_US"
+
+    def test_normalize_db_id(self):
+        assert _normalize_company_id("eodhd_company:0001_HK") == "1_HK"
+
+    def test_normalize_db_id_six_digit(self):
+        assert _normalize_company_id("eodhd_company:000426_HK") == "426_HK"
+
+    def test_normalize_db_id_no_zeros(self):
+        assert _normalize_company_id("eodhd_company:2378_HK") == "2378_HK"
+
+    def test_ticker_and_db_id_match(self):
+        assert _ticker_to_record_id("0001.HK") == _normalize_company_id(
+            "eodhd_company:0001_HK"
+        )
+        assert _ticker_to_record_id("000426.HK") == _normalize_company_id(
+            "eodhd_company:000426_HK"
+        )
+        assert _ticker_to_record_id("2378.HK") == _normalize_company_id(
+            "eodhd_company:2378_HK"
+        )

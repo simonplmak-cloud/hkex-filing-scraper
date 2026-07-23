@@ -21,15 +21,28 @@ def _ticker_to_record_id(ticker: str) -> str:
     return COMPANY_ID_PATTERN.format(code=code, exchange=exchange)
 
 
-def _load_company_ids() -> set[str]:
-    """Fetch all record IDs from the configured company table."""
-    company_ids: set[str] = set()
+def _normalize_company_id(full_id: str) -> str:
+    """Normalize a DB record ID for matching (strip leading zeros from the code segment)."""
+    if ":" in full_id:
+        tail = full_id.rsplit(":", 1)[-1]
+        parts = tail.split("_", 1)
+        code = parts[0].lstrip("0") or "0"
+        exchange = parts[1] if len(parts) > 1 else ""
+        return f"{code}_{exchange}"
+    return full_id
+
+
+def _load_company_ids() -> dict[str, str]:
+    """Fetch all record IDs from the configured company table.
+    Returns a dict mapping normalized key → actual DB record ID.
+    """
+    company_ids: dict[str, str] = {}
     comp_result = surreal_query(f"SELECT id FROM {COMPANY_TABLE};", timeout=60)
     if isinstance(comp_result, list) and len(comp_result) > 0:
         for c in comp_result[0].get("result", []):
-            cid = c.get("id", "")
+            cid = str(c.get("id", ""))
             if cid:
-                company_ids.add(str(cid))
+                company_ids[_normalize_company_id(cid)] = cid
     log(f"  Loaded {len(company_ids)} company IDs for matching")
     return company_ids
 
@@ -71,13 +84,13 @@ def link_filings_to_companies(ticker_set: set | None = None) -> int:
 
     company_ids = _load_company_ids()
 
-    valid_tickers: list[str] = []
+    valid_tickers: list[tuple[str, str]] = []
     skipped = 0
     for ticker in tickers:
         record_id = _ticker_to_record_id(ticker)
-        full_id = f"{COMPANY_TABLE}:{record_id}"
-        if full_id in company_ids:
-            valid_tickers.append(ticker)
+        db_id = company_ids.get(record_id)
+        if db_id:
+            valid_tickers.append((ticker, db_id))
         else:
             skipped += 1
     log(f"  Valid tickers: {len(valid_tickers)}, Skipped (no company): {skipped}")
@@ -88,14 +101,14 @@ def link_filings_to_companies(ticker_set: set | None = None) -> int:
     for batch_start in range(0, len(valid_tickers), LINK_BATCH_SIZE):
         batch = valid_tickers[batch_start : batch_start + LINK_BATCH_SIZE]
         sql_parts: list[str] = []
-        for ticker in batch:
+        for ticker, db_id in batch:
             safe_ticker = escape_sql(ticker)
             record_id = _ticker_to_record_id(ticker)
             sql_parts.append(
                 f"LET $f_{record_id} = SELECT id FROM exchange_filing "
                 f"WHERE companyTicker = '{safe_ticker}';\n"
                 f"FOR $r IN $f_{record_id} {{\n"
-                f"  RELATE ({COMPANY_TABLE}:{record_id})->has_filing->($r.id)\n"
+                f"  RELATE ({db_id})->has_filing->($r.id)\n"
                 f"    SET createdAt = time::now()\n"
                 f"    RETURN NONE;\n"
                 f"}};\n"
@@ -201,9 +214,9 @@ def cross_reference_filings(ticker_set: set | None = None) -> int:
     skipped = 0
     for filing_id, ref_ticker in xrefs:
         record_id = _ticker_to_record_id(ref_ticker)
-        full_id = f"{COMPANY_TABLE}:{record_id}"
-        if full_id in company_ids:
-            valid_xrefs.append((filing_id, record_id))
+        db_id = company_ids.get(record_id)
+        if db_id:
+            valid_xrefs.append((filing_id, db_id))
         else:
             skipped += 1
     log(f"  Valid cross-refs: {len(valid_xrefs)}, Skipped (no company): {skipped}")
@@ -214,9 +227,9 @@ def cross_reference_filings(ticker_set: set | None = None) -> int:
     for batch_start in range(0, len(valid_xrefs), XREF_BATCH_SIZE):
         batch = valid_xrefs[batch_start : batch_start + XREF_BATCH_SIZE]
         sql_parts: list[str] = []
-        for filing_id, record_id in batch:
+        for filing_id, db_id in batch:
             sql_parts.append(
-                f"RELATE ({filing_id})->references_filing->({COMPANY_TABLE}:{record_id})"
+                f"RELATE ({filing_id})->references_filing->({db_id})"
                 f" SET createdAt = time::now(), source = 'title_extraction'"
                 f" RETURN NONE;"
             )
