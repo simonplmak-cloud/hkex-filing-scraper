@@ -131,6 +131,13 @@ def generate_monthly_chunks(
 
     HKEx limits searches to one month when no stock code / document type is specified.
     """
+    # The API is date-granular (YYYYMMDD), so normalise before deriving bounds. Without
+    # this, a `date_from` later in the day than the month end could produce end < start.
+    date_from = date_from.replace(hour=0, minute=0, second=0, microsecond=0)
+    date_to = date_to.replace(hour=0, minute=0, second=0, microsecond=0)
+    if date_to < date_from:
+        return []
+
     chunks: List[Tuple[datetime, datetime]] = []
     cursor = datetime(date_to.year, date_to.month, 1)
     while cursor >= datetime(date_from.year, date_from.month, 1):

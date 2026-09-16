@@ -53,6 +53,14 @@ are set — see [docs/testing.md](docs/testing.md).
   and `.env.example` stay in step.
 - **Docs** follow [docs/STYLE.md](docs/STYLE.md) (US English, sentence-case headings, the term
   "sink" for a configured destination).
+- **Coverage ratchets.** `[tool.coverage.report].fail_under` in `pyproject.toml` is a floor
+  that only ever rises. The number is measured over the unit suite, which cannot execute the
+  live-only modules (sink drivers, extractor, SurrealDB/PostgreSQL/Neo4j/MongoDB/ClickHouse
+  adapters) — those are covered by the integration CI jobs. Add tests, then raise the floor in
+  the same pull request.
+- **Tests are offline by default.** `tests/conftest.py` blocks non-loopback connections, so a
+  test that reaches the network fails with an explanatory message; mark a genuinely networked
+  test `@pytest.mark.network` (excluded from the default run).
 
 ## Commit message conventions
 

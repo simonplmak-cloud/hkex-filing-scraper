@@ -60,6 +60,67 @@ jobs:
           /tmp/licenses/bin/pip install --quiet ".[all]"
           /tmp/licenses/bin/python scripts/check_licenses.py
 
+  coverage:
+    name: Coverage (unit suite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev,duckdb]"
+      - name: pytest with the coverage gate
+        run: pytest -q --cov --cov-branch --cov-report=term-missing --cov-report=xml
+      - name: Keep the coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  wheel:
+    name: Installed wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Build the wheel
+        run: |
+          python -m pip install --quiet --upgrade build
+          python -m build --wheel --outdir dist
+      - name: Install it into a clean environment
+        run: |
+          python -m venv /tmp/wheel
+          /tmp/wheel/bin/pip install --quiet dist/*.whl "pytest>=7" duckdb
+      - name: Run the suite against the installed package
+        run: |
+          mkdir -p /tmp/wheel-tests
+          cp -R tests /tmp/wheel-tests/tests
+          cd /tmp/wheel-tests
+          /tmp/wheel/bin/python -m pytest -q tests \
+            --ignore=tests/test_docs_consistency.py \
+            --ignore=tests/test_supply_chain.py \
+            --ignore=tests/test_theme.py
+
+  pre-commit:
+    name: Pre-commit hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Run every hook against every file
+        run: |
+          python -m pip install --quiet pre-commit
+          pre-commit run --all-files --show-diff-on-failure
+
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-latest
