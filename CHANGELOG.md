@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Release integrity.** Releases now generate a CycloneDX SBOM and attach signed
   **build-provenance** and **SBOM attestations** (`gh attestation verify`), and ship the SBOM
   alongside the wheel and sdist.
+- GitHub Actions bumped to their current majors (checkout v7, setup-python v7, upload-pages-artifact v5, codeql-action v4, gitleaks-action v3), all still pinned by SHA.
 - New CI jobs: `Supply chain` (lockfile check, `pip-audit` over the locked set, and a licence
   gate that fails on copyleft dependencies) and **OpenSSF Scorecard**.
 - `docs/releasing.md` documents how to verify a release; `SECURITY.md` gains a credential
