@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dark Bloomberg-terminal docs theme.** The site is now fixed dark (amber on near-black,
+  monospace throughout, no colour-scheme toggle) with dense tables, ruled code blocks, uppercase
+  section headers, visible focus rings, and 24px minimum nav targets. Fonts are the system
+  monospace stack — no external font requests. `tests/test_theme.py` computes the WCAG contrast
+  ratios from the stylesheet itself and asserts AA, so a palette edit cannot silently ship an
+  unreadable page.
+
 - **Data-fidelity guarantees across every sink.** Documents now carry a `document_sha256`
   integrity hash alongside the MD5 identity hash (SurrealDB, PostgreSQL, MySQL/MariaDB, SQLite,
   DuckDB, MongoDB, ClickHouse, Neo4j), mirrored in every schema and the PostgreSQL/relational
