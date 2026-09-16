@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **HTTP resilience.** A shared `requests` session now retries connection errors and transient
+  statuses (408/429/5xx) up to 4 times with exponential backoff and jitter, honours
+  `Retry-After`, and never replays the non-idempotent JSF `POST`. Phase 2 downloads use the same
+  session (streaming, with the size cap enforced mid-stream) instead of `urllib`.
+- The `User-Agent` now identifies the project and its repository URL instead of impersonating a
+  browser, and `REQUEST_DELAY_SECONDS` adds optional process-wide request pacing.
+- `tests/test_http.py` covers the retry policy, `Retry-After`, non-retryable statuses, the
+  retry budget, POST behaviour, pacing, and the download path.
+
 - **Supply-chain hardening.** Every GitHub Action is pinned to a commit SHA (Dependabot keeps
   them current), workflows declare least-privilege `permissions`, container images are pinned by
   digest, and `uv.lock` pins the full dependency set (`uv lock --check` in CI).

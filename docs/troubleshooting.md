@@ -87,6 +87,12 @@ matched in the company table; the other edge-capable sinks create edges for ever
 Re-run the same range; deduplication means only missing filings are added. `--coverage-report`
 shows per-chunk counts.
 
+**`http_429` / repeated `http_5xx` skips**
+The scraper already retries transient statuses (408/429/5xx) four times with exponential
+backoff and honours `Retry-After`. If they persist, lower `MAX_DOWNLOAD_WORKERS` and set
+`REQUEST_DELAY_SECONDS` (for example `0.5`) to slow the request rate, then re-run — dedup means
+only the missing filings are fetched.
+
 **Downloads skipped**
 Documents over 25 MB, unsupported types, or HTTP errors are recorded as `skipped`/`failed`
 with a reason such as `too_large`, `unsupported_type`, or `http_404`.

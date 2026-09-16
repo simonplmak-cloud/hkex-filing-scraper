@@ -23,7 +23,7 @@ by, or sponsored by Hong Kong Exchanges and Clearing Limited (HKEX).
    commercial use: <https://www.hkex.com.hk/Global/Exchange/Terms-of-Use>.
 2. **Rate limiting.** Be a good citizen: keep concurrency modest, use the built-in batching,
    and do not hammer the endpoint. The scraper defaults are chosen to be polite
-   (`MAX_DOWNLOAD_WORKERS`, monthly chunking).
+   (`MAX_DOWNLOAD_WORKERS`, monthly chunking, and `REQUEST_DELAY_SECONDS` for pacing).
 3. **Personal data & sensitive content.** Filings can contain personal data (e.g. director
    names). If you process them, comply with the laws that apply to you (for example, the
    Hong Kong Personal Data (Privacy) Ordinance and the GDPR where relevant).

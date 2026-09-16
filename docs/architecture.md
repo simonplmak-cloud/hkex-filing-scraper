@@ -96,6 +96,7 @@ flowchart TD
 | ------ | -------------- |
 | `main.py` | CLI parsing, validation, orchestration, per-sink schema init, N-way parity |
 | `config.py` | Environment variables + constants; `sink_ids()` parses `DATABASE_TARGET` |
+| `http.py` | Shared retrying `requests` session, User-Agent, optional request pacing |
 | `api.py` | HKEx JSON API session, chunking, record parsing |
 | `pipeline.py` | Phase 1/2 loops, canonical records, sink dispatch, per-sink accounting |
 | `extractor.py` | PDF/HTML/Excel → Markdown + tables |

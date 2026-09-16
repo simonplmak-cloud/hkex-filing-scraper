@@ -38,6 +38,7 @@ Phase 1 is always followed by Phase 2 unless `--metadata-only` is passed. `--bac
 |--------|---------------|
 | `main.py` | CLI arg parsing, orchestration, validation, per-sink schema init, N-way parity |
 | `config.py` | Env vars + constants (loaded at import time from CWD `.env`); `sink_ids()` parses `DATABASE_TARGET` |
+| `http.py` | Shared `requests` session with bounded retries (`urllib3.Retry`), polite User-Agent, and optional `REQUEST_DELAY_SECONDS` pacing. Only `GET`/`HEAD`/`OPTIONS` are retried — never the JSF `POST` |
 | `api.py` | HKEx JSON API session management, chunking, record parsing |
 | `pipeline.py` | Phase 1 metadata save, Phase 2 download/extract/save loop; canonical records + sink dispatch |
 | `extractor.py` | PDF/HTML/Excel text + table extraction → Markdown |

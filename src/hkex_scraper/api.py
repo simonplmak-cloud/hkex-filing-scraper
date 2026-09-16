@@ -5,16 +5,16 @@ from __future__ import annotations
 import re
 from calendar import monthrange
 from datetime import datetime
-from importlib.util import find_spec
 from typing import List, Optional, Tuple
 
+from . import http
 from .config import HKEX_API_ENDPOINT, HKEX_BASE_URL, HKEX_SEARCH_PAGE
 from .utils import squash_ws
 
 # ---------------------------------------------------------------------------
 # Optional dependencies
 # ---------------------------------------------------------------------------
-REQUESTS_AVAILABLE = find_spec("requests") is not None
+REQUESTS_AVAILABLE = http.REQUESTS_AVAILABLE
 
 try:
     from bs4 import BeautifulSoup  # type: ignore
@@ -165,6 +165,7 @@ def fetch_chunk_via_api(
     import json
 
     # Step 1: POST the form to set the date range on the server session
+    http.pace()
     page_resp = session.get(
         HKEX_SEARCH_PAGE,
         params={
@@ -223,6 +224,7 @@ def fetch_chunk_via_api(
             chunk_size = min(chunk_size, max_records - len(all_records))
         row_range = fetched + chunk_size
 
+        http.pace()
         api_resp = session.get(
             HKEX_API_ENDPOINT,
             params={
