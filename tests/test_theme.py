@@ -123,7 +123,15 @@ class TestWcag22Specifics:
 
     def test_colour_is_never_the_only_cue_for_links(self):
         css = CSS.read_text(encoding="utf-8")
-        assert "text-decoration: underline" in css
+        # Prose links are underlined by default (axe: link-in-text-block); chrome is not.
+        assert re.search(r"\.md-typeset a \{[^}]*text-decoration: underline", css)
+        assert re.search(r"\.md-nav a,[^}]*text-decoration: none", css)
+
+    def test_scroll_containers_are_keyboard_reachable(self):
+        script = (ROOT / "docs" / "assets" / "javascripts" / "a11y.js").read_text(encoding="utf-8")
+        assert "md-typeset__scrollwrap" in script
+        assert 'setAttribute("tabindex", "0")' in script
+        assert 'setAttribute("aria-label", "Scrollable table")' in script
 
     def test_search_toggle_patch_is_wired_in(self):
         mkdocs = MKDOCS.read_text(encoding="utf-8")
