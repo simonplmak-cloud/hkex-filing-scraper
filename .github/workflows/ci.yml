@@ -5,13 +5,16 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint & format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install
@@ -25,19 +28,47 @@ jobs:
     name: Markdown lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: markdownlint-cli2
-        uses: DavidAnson/markdownlint-cli2-action@v24
+        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24
+
+  supply-chain:
+    name: Supply chain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          enable-cache: true
+      - name: Lockfile is current
+        run: uv lock --check
+      - name: Install exactly from the lockfile
+        run: uv sync --frozen --all-extras
+      - name: Export the locked runtime dependency set
+        # Runtime extras that ship in `all`. The AGPL `pdf` extra and the `dev` tooling are
+        # deliberately excluded; tests/test_supply_chain.py keeps this list in step with pyproject.
+        run: |
+          uv export --frozen --no-dev --no-hashes --no-emit-project \
+            --extra excel --extra postgres --extra mysql --extra duckdb \
+            --extra mongodb --extra clickhouse --extra neo4j \
+            --output-file /tmp/requirements-runtime.txt
+      - name: Audit the locked set for known vulnerabilities
+        run: uvx --from pip-audit pip-audit --strict --requirement /tmp/requirements-runtime.txt
+      - name: License policy (no copyleft in the all extra)
+        run: |
+          python -m venv /tmp/licenses
+          /tmp/licenses/bin/pip install --quiet ".[all]"
+          /tmp/licenses/bin/python scripts/check_licenses.py
 
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -49,10 +80,10 @@ jobs:
       matrix:
         extra: [".", ".[all]"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install the documented way
@@ -68,8 +99,8 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install
@@ -82,7 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
         env:
           POSTGRES_USER: hkex
           POSTGRES_PASSWORD: hkex
@@ -95,8 +126,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install
@@ -112,7 +143,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mysql:
-        image: mysql:8
+        image: mysql:8@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: hkex
@@ -126,7 +157,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       mariadb:
-        image: mariadb:11
+        image: mariadb:11@sha256:8b5f33ebd85d1775657e974ed10434128bb493c80e826ceaa54074fd1a92a112
         env:
           MARIADB_ROOT_PASSWORD: root
           MARIADB_DATABASE: hkex
@@ -140,8 +171,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install
@@ -165,8 +196,8 @@ jobs:
     name: SurrealDB integration
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install
@@ -174,7 +205,7 @@ jobs:
       - name: Start SurrealDB
         run: |
           docker run -d --name surrealdb -p 8000:8000 \
-            surrealdb/surrealdb:v3.2.4 start --log warn --user root --pass root --bind 0.0.0.0:8000 memory
+            surrealdb/surrealdb:v3.2.4@sha256:51baed8709f57f67dcf04b30e3177db846803fa9342dae2be58c6fa5f8d59843 start --log warn --user root --pass root --bind 0.0.0.0:8000 memory
           for _ in $(seq 1 30); do curl -sf http://localhost:8000/health && break; sleep 1; done
       - name: Integration tests
         env:
@@ -192,7 +223,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
         env:
           POSTGRES_USER: hkex
           POSTGRES_PASSWORD: hkex
@@ -205,8 +236,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install
@@ -214,7 +245,7 @@ jobs:
       - name: Start SurrealDB
         run: |
           docker run -d --name surrealdb -p 8000:8000 \
-            surrealdb/surrealdb:v3.2.4 start --log warn --user root --pass root --bind 0.0.0.0:8000 memory
+            surrealdb/surrealdb:v3.2.4@sha256:51baed8709f57f67dcf04b30e3177db846803fa9342dae2be58c6fa5f8d59843 start --log warn --user root --pass root --bind 0.0.0.0:8000 memory
           for _ in $(seq 1 30); do curl -sf http://localhost:8000/health && break; sleep 1; done
       - name: Integration tests (both sinks)
         env:
@@ -237,11 +268,11 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mongodb:
-        image: mongo:7
+        image: mongo:7@sha256:9854f7139445d766a9523571d6f047530c45547460ffcf8259eb2bf4264632ca
         ports:
           - 27017:27017
       clickhouse:
-        image: clickhouse/clickhouse-server:24.8
+        image: clickhouse/clickhouse-server:24.8@sha256:1ffa82edee000a42c09313bd9f1293d94c570aee74babc1b3ca9983a35fa597b
         env:
           CLICKHOUSE_DB: hkex
           CLICKHOUSE_USER: hkex
@@ -250,14 +281,14 @@ jobs:
         ports:
           - 8123:8123
       neo4j:
-        image: neo4j:5
+        image: neo4j:5@sha256:bb268a2f1b4f3c79e4bd1a00a82a6e63bbd4fcc4088da03c1b2380655f256cb2
         env:
           NEO4J_AUTH: neo4j/hkexpassword
         ports:
           - 7687:7687
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install

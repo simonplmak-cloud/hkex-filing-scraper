@@ -72,6 +72,28 @@ git tag -d v1.2.0
 If the robot is badly broken and you need the files **right now**, there is a manual
 escape hatch: see [Release automation → Manual fallback](release-automation.md#manual-fallback).
 
+## Verifying a release
+
+Every release is built by CI and carries a signed attestation of how it was built, plus a
+CycloneDX SBOM. Consumers can check both:
+
+```bash
+# Build provenance: was this wheel built by this repository's release workflow?
+gh attestation verify hkex_filing_scraper-2.0.0-py3-none-any.whl \
+  --repo simonplmak-cloud/hkex-filing-scraper
+
+# The SBOM that ships alongside it
+gh attestation verify hkex_filing_scraper-2.0.0-py3-none-any.whl \
+  --repo simonplmak-cloud/hkex-filing-scraper \
+  --predicate-type https://cyclonedx.org/bom
+```
+
+`SHA256SUMS` in the release assets lets you check the download itself:
+
+```bash
+sha256sum --check SHA256SUMS
+```
+
 ## Rolling back a release
 
 If a published version turns out to be bad, **do not delete the tag or the release** — other
