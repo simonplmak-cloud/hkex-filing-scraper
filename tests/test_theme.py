@@ -124,3 +124,12 @@ class TestWcag22Specifics:
     def test_colour_is_never_the_only_cue_for_links(self):
         css = CSS.read_text(encoding="utf-8")
         assert "text-decoration: underline" in css
+
+    def test_search_toggle_patch_is_wired_in(self):
+        mkdocs = MKDOCS.read_text(encoding="utf-8")
+        script = ROOT / "docs" / "assets" / "javascripts" / "a11y.js"
+        assert script.exists(), "the search-toggle a11y patch is missing"
+        assert "assets/javascripts/a11y.js" in mkdocs
+        assert "extra_javascript:" in mkdocs
+        body = script.read_text(encoding="utf-8")
+        assert "#__search" in body and "aria-label" in body

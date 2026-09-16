@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Accessibility: a small script gives Material's unlabelled search toggle an accessible
+  name, clearing the only axe violation (WCAG 2.2 `label`, critical) on every page.
 - **Dark Bloomberg-terminal docs theme.** The site is now fixed dark (amber on near-black,
   monospace throughout, no colour-scheme toggle) with dense tables, ruled code blocks, uppercase
   section headers, visible focus rings, and 24px minimum nav targets. Fonts are the system
