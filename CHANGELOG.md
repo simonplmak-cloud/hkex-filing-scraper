@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Breaking:** `DATABASE_TARGET` is now an explicit, ordered, comma-separated list of sink ids (`postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb`). The `both`/`dual` aliases and the implicit `surrealdb` default are removed; an unset or unknown value fails fast with an actionable message.
+- **Breaking:** `DATABASE_TARGET` is now an explicit, ordered, comma-separated list of sink ids (`postgres`, `mysql`, `mariadb`, `sqlite`, `duckdb`, `mongodb`, `clickhouse`, `neo4j`, `surrealdb`). The `both`/`dual` aliases and the implicit `surrealdb` default are removed; an unset or unknown value fails fast with an actionable message.
 - **Breaking:** reads are served by the first configured sink that supports reads; there is no per-sink read branch and no `READ_SOURCE` variable.
 - Every explicitly configured sink is now required: any sink's write failure marks the run non-zero (previously a non-sole PostgreSQL sink could fail without failing the run). Failure isolation is unchanged.
 - `--parity-report` is now N-way: it prints a filing count per sink and the spread between the maximum and minimum.

@@ -5,14 +5,32 @@ build-backend = "hatchling.build"
 [project]
 name = "hkex-filing-scraper"
 dynamic = ["version"]
-description = "Scrape and ingest HKEx (Hong Kong Stock Exchange) regulatory filings into SurrealDB and/or PostgreSQL with full-text extraction and graph linking."
+description = "Scrape and ingest HKEx (Hong Kong Stock Exchange) regulatory filings into PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, ClickHouse, Neo4j, or SurrealDB with full-text extraction and graph linking."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 authors = [
     { name = "Simon Mak" },
 ]
-keywords = ["hkex", "hong-kong", "filings", "scraper", "surrealdb", "postgresql", "dual-write", "graph-database", "financial-data"]
+keywords = [
+    "hkex",
+    "hong-kong",
+    "filings",
+    "scraper",
+    "financial-data",
+    "data-pipeline",
+    "etl",
+    "multi-database",
+    "postgresql",
+    "mysql",
+    "sqlite",
+    "duckdb",
+    "mongodb",
+    "clickhouse",
+    "neo4j",
+    "surrealdb",
+    "graph-database",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

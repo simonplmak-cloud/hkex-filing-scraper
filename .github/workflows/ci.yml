@@ -21,6 +21,37 @@ jobs:
       - name: ruff format --check
         run: ruff format --check
 
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  install-matrix:
+    name: Install (${{ matrix.extra }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extra: [".", ".[all]"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the documented way
+        run: pip install "${{ matrix.extra }}"
+      - name: CLI smoke
+        run: hkex-scraper --help >/dev/null
+
   test:
     name: Unit tests (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -67,6 +98,60 @@ jobs:
           DATABASE_TARGET: postgres
           POSTGRES_DSN: postgresql://hkex:hkex@localhost:5432/hkex
         run: pytest -q tests/test_postgres_integration.py
+
+  integration-mysql:
+    name: MySQL / MariaDB integration
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: hkex
+          MYSQL_USER: hkex
+          MYSQL_PASSWORD: hkex
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: hkex
+          MARIADB_USER: hkex
+          MARIADB_PASSWORD: hkex
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev,mysql]"
+      - name: Integration tests
+        env:
+          DATABASE_TARGET: mysql,mariadb
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: "3306"
+          MYSQL_DATABASE: hkex
+          MYSQL_USER: hkex
+          MYSQL_PASSWORD: hkex
+          MARIADB_HOST: 127.0.0.1
+          MARIADB_PORT: "3307"
+          MARIADB_DATABASE: hkex
+          MARIADB_USER: hkex
+          MARIADB_PASSWORD: hkex
+        run: pytest -q tests/test_mysql_integration.py
 
   integration-surrealdb:
     name: SurrealDB integration

@@ -74,10 +74,14 @@ jobs:
           EXPECTED: ${{ steps.version.outputs.normalized }}
         run: |
           python -m venv /tmp/verify
-          /tmp/verify/bin/pip install --quiet dist/*.whl
+          WHEEL="$(ls dist/*.whl)"
+          /tmp/verify/bin/pip install --quiet "$WHEEL"
           # --help works for every released version (including tags that predate --version)
           /tmp/verify/bin/hkex-scraper --help >/dev/null
           /tmp/verify/bin/python -c "import importlib.metadata as md, os, hkex_scraper; expected = os.environ['EXPECTED']; assert hkex_scraper.__version__ == expected, 'runtime %s != %s' % (hkex_scraper.__version__, expected); assert md.version('hkex-filing-scraper') == expected, 'distribution %s != %s' % (md.version('hkex-filing-scraper'), expected); print('runtime and distribution versions ok:', hkex_scraper.__version__)"
+          # An optional extra installs from the same wheel and registers its sink.
+          /tmp/verify/bin/pip install --quiet "${WHEEL}[duckdb]"
+          /tmp/verify/bin/python -c "from hkex_scraper import sinks; assert 'duckdb' in sinks.known_ids(), sinks.known_ids(); import duckdb; print('extra install + registry ok:', sinks.known_ids())"
 
       - name: Generate checksums
         run: |

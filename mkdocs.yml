@@ -1,0 +1,49 @@
+site_name: HKEx Filing Scraper
+site_description: Scrape and ingest HKEx regulatory filings into PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, ClickHouse, Neo4j, or SurrealDB.
+site_url: https://simonplmak-cloud.github.io/hkex-filing-scraper/
+repo_url: https://github.com/simonplmak-cloud/hkex-filing-scraper
+repo_name: simonplmak-cloud/hkex-filing-scraper
+edit_uri: edit/main/docs/
+docs_dir: docs
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.highlight
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Backends:
+      - Overview: backends/README.md
+      - PostgreSQL: postgresql.md
+      - MySQL / MariaDB: backends/mysql.md
+      - SQLite: backends/sqlite.md
+      - DuckDB: backends/duckdb.md
+      - MongoDB: backends/mongodb.md
+      - ClickHouse: backends/clickhouse.md
+      - Neo4j: backends/neo4j.md
+  - Configuration: configuration.md
+  - CLI: cli.md
+  - Architecture: architecture.md
+  - Troubleshooting: troubleshooting.md
+  - Testing: testing.md
+  - De-risking: de-risking.md
+  - Legal: legal.md
+  - Upgrading: upgrading.md
+  - Releasing:
+      - How to release: releasing.md
+      - Automation reference: release-automation.md
+  - Decisions:
+      - ADR 0001 — Versioning: adr/0001-versioning-and-release-automation.md
+      - ADR 0002 — Multi-sink: adr/0002-multi-sink-architecture.md
+      - ADR 0003 — Support policy: adr/0003-sink-support-policy.md

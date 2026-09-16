@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "HKEx Filing Scraper"
+abstract: >-
+  An open-source Python tool that scrapes 25+ years of Hong Kong Stock Exchange
+  (HKEx) regulatory filings and ingests them into PostgreSQL, MySQL/MariaDB,
+  SQLite, DuckDB, MongoDB, ClickHouse, Neo4j, or SurrealDB, with full-text
+  extraction and optional graph linking.
+type: software
+license: MIT
+license-url: "https://github.com/simonplmak-cloud/hkex-filing-scraper/blob/main/LICENSE"
+repository-code: "https://github.com/simonplmak-cloud/hkex-filing-scraper"
+url: "https://github.com/simonplmak-cloud/hkex-filing-scraper"
+keywords:
+  - hkex
+  - regulatory-filings
+  - data-pipeline
+  - etl
+  - postgresql
+  - surrealdb
+  - graph-database
+  - web-scraping
+authors:
+  - family-names: Mak
+    given-names: Simon
+    email: simon.pl.mak@gmail.com
+    website: "https://dev.to/simonplmakcloud"

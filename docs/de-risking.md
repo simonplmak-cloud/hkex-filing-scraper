@@ -1,0 +1,42 @@
+# De-risking register
+
+Living document. Reviewed at every release. Scores are **L×I** (likelihood × impact, 1–5).
+`Status` tracks which horizon the control belongs to: **C1** = this release, **C2** = next
+(API resilience), **C3** = scheduled/structural.
+
+| ID | Risk | L | I | Score | Control (current / planned) | Status |
+|----|------|---|---|-------|-----------------------------|--------|
+| R1 | Undocumented HKEx API breaks (JSF/ViewState, `rowRange`, silent format change) | 4 | 5 | **20** | tolerant parsing, per-chunk coverage, retries · **planned:** recorded fixtures + daily canary | C2 |
+| R2 | Cross-sink data loss / corruption (truncation, partial writes, ClickHouse merge) | 2 | 5 | 10 | idempotent upserts, no-clobber, per-sink counters · **planned:** `--verify` + fault injection | C2 |
+| R3 | Solo bus factor / governance | 4 | 4 | 16 | docs, CONTRIBUTING, templates · **added:** CODEOWNERS, Discussions, roadmap, good-first-issue | C1 |
+| R4 | Docs ↔ code drift (already observed) | 4 | 3 | 12 | manual review · **added:**`tests/test_docs_consistency.py` | C1 |
+| R5 | CI not enforced on `main` | 3 | 4 | 12 | CI on PRs · **added:** branch protection (required checks + conversation resolution) | C1 |
+| R6 | Breaking change adoption friction | 4 | 3 | 12 | `docs/upgrading.md`, fail-fast message · **added:** v2.0.0 migration table; **planned:** deprecation shim | C1/C3 |
+| R7 | Legal / HKEx Terms of Use | 2 | 5 | 10 | README note · **added:**`docs/legal.md` + prominent README section | C1 |
+| R8 | Secrets leakage | 2 | 5 | 10 | secret scanning, `redact()` tests · **added:** CI secret-scan job | C1 |
+| R9 | Dependency abandonment / licence change | 3 | 3 | 9 | ADR 0003, optional extras, pinned ruff · **added:** Dependabot | C1 |
+| R10 | Untested sink paths (MySQL live, `.[all]` install) | 3 | 3 | 9 | unit tests · **added:** MySQL/MariaDB CI, `install-matrix` | C1 |
+| R11 | Supply chain / provenance | 2 | 4 | 8 | secret scanning · **added:** CodeQL; **planned:** SBOM + build attestation + Scorecard | C1/C2 |
+| R12 | Scale / performance | 3 | 3 | 9 | batching, parallel downloads, 25 MB cap · **planned:** perf budget test, run report | C2/C3 |
+| R13 | Release / rollback risk | 2 | 3 | 6 | tag-driven release, checksums, smoke test · **added:** rollback runbook; **planned:** attestation | C1/C2 |
+
+## High-leverage controls (do these first)
+1. **R1 — recorded HKEx fixtures + canary.** The only risk that can make the tool silently wrong.
+2. **R4 — docs-consistency test.** Prevents the drift that already happened.
+3. **R10 — MySQL live CI + `.[all]` install test.** Closes the two known verification holes.
+4. **R5/R9/R11 — branch protection, Dependabot, CodeQL.** Cheap permanent floors.
+5. **R2 — `--verify` reconciliation.** Turns "we hope the sinks agree" into a checked invariant.
+
+## Success metrics (targets)
+| Metric | Target |
+|--------|--------|
+| Register risks with an automated control | ≥ 80% |
+| Sinks with live CI coverage | 8 / 8 |
+| Docs-drift incidents after the guard | 0 |
+| Time to detect an HKEx API break | < 24 h (canary) |
+| Release rollback time | < 5 min (pin previous tag) |
+| Open high-severity security alerts | 0 |
+
+## Ownership & cadence
+Maintainer: Simon Mak. Review at each release (or quarterly if no release). New risks are
+added with an L×I score and at least one control; a risk with no control is a release blocker.

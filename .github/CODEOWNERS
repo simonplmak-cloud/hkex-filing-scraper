@@ -1,0 +1,8 @@
+# Default owner for everything in the repo.
+* @simonplmak-cloud
+
+# Sink architecture and per-engine adapters.
+/src/hkex_scraper/sinks/ @simonplmak-cloud
+
+# CI, release, and GitHub configuration.
+/.github/ @simonplmak-cloud
