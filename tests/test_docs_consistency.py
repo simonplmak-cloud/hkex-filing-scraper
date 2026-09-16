@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pathlib
 import re
-import tomllib
 
 import pytest
 
@@ -72,9 +71,15 @@ class TestBackendGuides:
 
 class TestExtrasAlignment:
     def _pyproject_extras(self) -> set[str]:
-        with open(ROOT / "pyproject.toml", "rb") as handle:
-            data = tomllib.load(handle)
-        return set(data["project"]["optional-dependencies"])
+        # Parse the table text rather than tomllib (stdlib only from Python 3.11).
+        text = _read("pyproject.toml")
+        section = text.split("[project.optional-dependencies]", 1)[1].split("\n[", 1)[0]
+        extras = set()
+        for line in section.splitlines():
+            match = re.match(r"^([A-Za-z0-9_-]+)\s*=", line)
+            if match:
+                extras.add(match.group(1))
+        return extras
 
     def test_every_extra_is_documented_in_readme(self):
         readme = _read("README.md")
