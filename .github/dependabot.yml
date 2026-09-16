@@ -24,8 +24,7 @@ updates:
       interval: weekly
     labels: ["dependencies", "ci"]
 
-  - package-ecosystem: docker
-    directory: "/examples"
-    schedule:
-      interval: weekly
-    labels: ["dependencies", "docker"]
+# Container images are pinned by digest in .github/workflows/ci.yml and
+# examples/docker-compose.yml. Dependabot's `docker` ecosystem only understands Dockerfiles
+# and Kubernetes YAML (not compose files), so those digests are bumped manually when an
+# engine release is worth adopting.
