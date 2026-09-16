@@ -16,14 +16,14 @@ Living document. Reviewed at every release. Scores are **L×I** (likelihood × i
 | R8 | Secrets leakage | 2 | 5 | 10 | secret scanning, `redact()` tests · **added:** CI secret-scan job | C1 |
 | R9 | Dependency abandonment / license change | 3 | 3 | 9 | ADR 0003, optional extras, pinned ruff · **added:** Dependabot | C1 |
 | R10 | Untested sink paths (MySQL live, `.[all]` install) | 3 | 3 | 9 | unit tests · **added:** MySQL/MariaDB CI, `install-matrix` | C1 |
-| R11 | Supply chain / provenance | 2 | 4 | 8 | secret scanning · **added:** CodeQL; **planned:** SBOM + build attestation + Scorecard | C1/C2 |
+| R11 | Supply chain / provenance | 2 | 4 | 8 | secret scanning + push protection, CodeQL · **added:** every Action SHA-pinned, least-privilege workflow tokens, `pip-audit` over the locked set, license gate, CycloneDX SBOM + build-provenance/SBOM attestations, OpenSSF Scorecard | C1 |
 | R12 | Scale / performance | 3 | 3 | 9 | batching, parallel downloads, 25 MB cap · **planned:** perf budget test, run report | C2/C3 |
 | R13 | Release / rollback risk | 2 | 3 | 6 | tag-driven release, checksums, smoke test · **added:** rollback runbook; **planned:** attestation | C1/C2 |
-| R14 | Optional AGPL dependency (`pdf` extra) creates licence obligations | 3 | 3 | 9 | `pdf` is excluded from `[all]`; disclosed in README, docs/legal.md, and pyproject; **planned:** licence-scan CI gate | C1 |
+| R14 | Optional AGPL dependency (`pdf` extra) creates license obligations | 3 | 3 | 9 | `pdf` is excluded from `[all]`; disclosed in README, docs/legal.md, and pyproject; **planned:** license-scan CI gate | C1 |
 | R15 | Cross-sink semantic drift (collation, timestamp precision, eventual dedup) | 3 | 4 | 12 | idempotent upserts, no-clobber, per-sink counters · **planned:** `--verify` semantic reconciliation, utf8mb4/exact collations, ClickHouse `version` + `FINAL` | C2 |
-| R16 | Non-reproducible CI installs | 3 | 3 | 9 | pinned ruff range · **planned:** `uv.lock` + hash-verified installs, pinned container images | C1 |
-| R17 | Repository controls weaker than assumed (no review, no signatures, mutable action tags) | 3 | 4 | 12 | branch protection, conversation resolution · **planned:** strict up-to-date, code-owner review, SHA-pinned actions; signatures deferred (no signing key configured) | C1 |
-| R18 | Shared PAT used as the wiki-mirror secret (broad blast radius, shared expiry) | 3 | 4 | 12 | secret scanning + push protection, workflow limited to `push`→`main`/dispatch, `contents: read`, `::add-mask::` · **planned:** `wiki` environment gate, 90-day rotation runbook, dedicated token | C1 |
+| R16 | Non-reproducible CI installs | 3 | 3 | 9 | pinned ruff range · **added:** `uv.lock` with `uv lock --check` and `uv sync --frozen` in CI, container images pinned by digest | C1 |
+| R17 | Repository controls weaker than assumed | 3 | 4 | 12 | branch protection, conversation resolution · **added:** strict up-to-date status checks, SHA-pinned Actions. Code-owner review and commit signatures deferred: a solo maintainer cannot satisfy a required approval without using the admin override, which bypasses every check | C1 |
+| R18 | Broad PAT used as the wiki-mirror secret (blast radius, shared expiry) | 3 | 4 | 12 | secret scanning + push protection, workflow limited to `push`→`main`/dispatch, `contents: read`, `::add-mask::`, `wiki` environment gate · **added:** rotation runbook in SECURITY.md. A dedicated `repo`-only token is still recommended | C1 |
 
 ## High-leverage controls (do these first)
 

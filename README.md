@@ -140,6 +140,15 @@ pip install ".[duckdb]"    # or: mongodb, clickhouse, neo4j
 Optional extras: `excel`, `postgres`, `mysql`, `duckdb`, `mongodb`, `clickhouse`, `neo4j`,
 `all`, `dev`. SQLite and SurrealDB need no extra.
 
+For a fully locked development environment, `uv.lock` pins every dependency including extras:
+
+```bash
+uv sync --frozen --all-extras
+```
+
+Releases carry signed build provenance and a CycloneDX SBOM — see
+[Verifying a release](docs/releasing.md#verifying-a-release).
+
 ```bash
 # PDF text + table extraction. AGPL-3.0 — see the license note below.
 pip install ".[pdf]"

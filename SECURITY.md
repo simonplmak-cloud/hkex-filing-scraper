@@ -60,5 +60,33 @@ respond before public disclosure.
 ## Hardening already in place
 
 - Parameterised SQL everywhere; per-sink redaction of credentials in error paths.
-- Secret scanning, CodeQL, and Dependabot enabled on the repository.
-- Least-privilege `GITHUB_TOKEN` permissions per workflow.
+- Secret scanning (with push protection), CodeQL, and Dependabot enabled on the repository.
+- Every GitHub Action is pinned to a full commit SHA, so a moved tag cannot change what runs.
+- Workflows declare least-privilege `permissions` (`contents: read` by default; each
+  privileged job grants only what it needs).
+- Releases are built in CI and carry **build provenance** and a **CycloneDX SBOM** attestation,
+  verifiable with `gh attestation verify` (see [Releasing](docs/releasing.md)).
+- Continuous dependency audit (`pip-audit` over the locked set), a license gate that fails on
+  copyleft dependencies, and OpenSSF Scorecard.
+- Container images used in CI and `examples/` are pinned by digest.
+
+## Credential rotation
+
+The wiki mirror reads one repository secret, `WIKI_TOKEN` (a classic PAT with `repo` scope,
+required because fine-grained tokens cannot push to a `.wiki` repository). To rotate it:
+
+1. Create a replacement **classic** PAT with the `repo` scope at
+   <https://github.com/settings/tokens>.
+2. Put it in the local, gitignored env file as `WIKI_TOKEN` (`~/.env.opencode`, mode `600`).
+3. Update the repository secret without exposing the value:
+
+   ```bash
+   grep -E '^WIKI_TOKEN=' ~/.env.opencode | cut -d= -f2- | tr -d '\r\n' | gh secret set WIKI_TOKEN
+   ```
+
+4. Re-run the mirror: `gh workflow run wiki.yml --ref main`.
+5. Revoke the previous token.
+
+The `wiki` environment gates that secret: a run must be approved through the environment
+before the token is exposed to a job. Any credential that has ever been pasted into a chat,
+an issue, or a log must be treated as compromised and revoked immediately.

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Supply-chain hardening.** Every GitHub Action is pinned to a commit SHA (Dependabot keeps
+  them current), workflows declare least-privilege `permissions`, container images are pinned by
+  digest, and `uv.lock` pins the full dependency set (`uv lock --check` in CI).
+- **Release integrity.** Releases now generate a CycloneDX SBOM and attach signed
+  **build-provenance** and **SBOM attestations** (`gh attestation verify`), and ship the SBOM
+  alongside the wheel and sdist.
+- New CI jobs: `Supply chain` (lockfile check, `pip-audit` over the locked set, and a licence
+  gate that fails on copyleft dependencies) and **OpenSSF Scorecard**.
+- `docs/releasing.md` documents how to verify a release; `SECURITY.md` gains a credential
+  rotation runbook and the `wiki` environment gate.
+
 - `docs/STYLE.md` — one style standard for every human-facing doc (US English, sentence-case
   headings, canonical term **sink** vs **engine**), enforced by a new `markdownlint-cli2` CI job.
 - Community files: `SUPPORT.md`, `GOVERNANCE.md`, `.github/FUNDING.yml`, and
@@ -39,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "recommended", and the default `.env.example` target is a neutral two-sink example.
 - `docs/backends/` is renamed to `docs/sinks/`; `docs/postgresql.md` moves to
   `docs/sinks/postgresql.md`; `docs/architecture.md` is engine-agnostic.
+- The `pdf` extra drops the obsolete `camelot-py[cv]` extra (camelot 2.x has no `cv` extra).
 - **The `pdf` extra (PyMuPDF, pymupdf4llm) is no longer part of `[all]`** — it is AGPL-3.0 and
   is now installed only on request, with the licence disclosed in the README, `docs/legal.md`,
   and `pyproject.toml`.

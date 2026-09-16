@@ -9,7 +9,7 @@
 
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
     environment:
       POSTGRES_USER: hkex
       POSTGRES_PASSWORD: hkex
@@ -22,7 +22,7 @@ services:
       retries: 10
 
   mysql:
-    image: mysql:8
+    image: mysql:8@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: hkex
@@ -36,7 +36,7 @@ services:
       retries: 10
 
   mariadb:
-    image: mariadb:11
+    image: mariadb:11@sha256:8b5f33ebd85d1775657e974ed10434128bb493c80e826ceaa54074fd1a92a112
     environment:
       MARIADB_ROOT_PASSWORD: root
       MARIADB_DATABASE: hkex
@@ -50,11 +50,11 @@ services:
       retries: 10
 
   mongodb:
-    image: mongo:7
+    image: mongo:7@sha256:9854f7139445d766a9523571d6f047530c45547460ffcf8259eb2bf4264632ca
     ports: ["27017:27017"]
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8
+    image: clickhouse/clickhouse-server:24.8@sha256:1ffa82edee000a42c09313bd9f1293d94c570aee74babc1b3ca9983a35fa597b
     environment:
       CLICKHOUSE_DB: hkex
       CLICKHOUSE_USER: hkex
@@ -63,12 +63,12 @@ services:
     ports: ["8123:8123", "9000:9000"]
 
   neo4j:
-    image: neo4j:5
+    image: neo4j:5@sha256:bb268a2f1b4f3c79e4bd1a00a82a6e63bbd4fcc4088da03c1b2380655f256cb2
     environment:
       NEO4J_AUTH: neo4j/hkexpassword
     ports: ["7474:7474", "7687:7687"]
 
   surrealdb:
-    image: surrealdb/surrealdb:v3.2.4
+    image: surrealdb/surrealdb:v3.2.4@sha256:51baed8709f57f67dcf04b30e3177db846803fa9342dae2be58c6fa5f8d59843
     command: ["start", "--log", "warn", "--user", "root", "--pass", "root", "--bind", "0.0.0.0:8000", "memory"]
     ports: ["8000:8000"]
