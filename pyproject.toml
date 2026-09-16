@@ -116,7 +116,7 @@ source = ["src/hkex_scraper"]
 # make a build pass. It is measured over the unit suite, which cannot execute the live-only
 # modules (sink drivers, extractor, SurrealDB/PostgreSQL/Neo4j/MongoDB/ClickHouse adapters) —
 # those are exercised by the integration CI jobs instead. See CONTRIBUTING.md.
-fail_under = 43
+fail_under = 45
 show_missing = true
 skip_covered = true
 precision = 1

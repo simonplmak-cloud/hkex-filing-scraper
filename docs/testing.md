@@ -123,6 +123,19 @@ the whole configured set (matching `main._init_schemas()`).
 | `tests/test_surrealdb_integration.py` | `SURREAL_*` | schema, idempotent upserts, document payload, coverage, graph edges |
 | `tests/test_dual_write_integration.py` | two or more sinks | the same filing lands in every configured sink; document status mirrors |
 
+## Fixtures, fault injection, and the canary
+
+- **Replayed API contract** (`tests/test_api_contract.py`): `responses` serves the recorded
+  response shapes (JSF page, form POST, JSON pages), so the full fetch path — ViewState
+  extraction, pagination, tolerant parsing of nulls/non-strings/CJK titles — is exercised
+  offline. Regressions here mean the HKEx API changed shape.
+- **Fault injection** (`tests/test_fault_injection.py`): scripted sinks prove that one sink
+  failing (or raising) never blocks another, that failures are counted, and that the run exits
+  non-zero.
+- **Canary** (`scripts/canary.py`, `.github/workflows/canary.yml`): a daily live check that
+  fetches a small recent window and asserts the shape is unchanged, opening an issue when it is
+  not. Run it by hand with `python scripts/canary.py --days 7 --max 5 --json`.
+
 ## CI
 
 `.github/workflows/ci.yml` runs lint/format, a markdown lint, unit tests on Python 3.10–3.13
