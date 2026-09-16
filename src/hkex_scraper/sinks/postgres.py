@@ -60,6 +60,9 @@ class PostgresSink(Sink):
     def upsert_edges(self, edges: List[Dict[str, Any]], kind: str) -> Tuple[int, str]:
         return db_postgres.upsert_edges(edges, kind)
 
+    def read_filing_digests(self) -> Tuple[List[Dict[str, Any]], str]:
+        return db_postgres.read_filing_digests()
+
     def count_filings(self) -> Tuple[int, str]:
         return db_postgres.count_filings()
 

@@ -255,6 +255,13 @@ class Dialect:
             f"AND {self.q('document_url')} IS NOT NULL AND {self.q('document_url')} <> ''"
         )
 
+    def select_digests_sql(self) -> str:
+        """Every filing id with its integrity hash, ordered for a stable diff."""
+        return (
+            f"SELECT {self.q('filing_id')}, {self.q('document_sha256')} "
+            f"FROM {self.q('exchange_filing')} ORDER BY {self.q('filing_id')}"
+        )
+
     def fetch_pending_sql(self) -> str:
         return (
             f"SELECT {self.q('filing_id')}, {self.q('document_url')}, {self.q('filing_date')} "

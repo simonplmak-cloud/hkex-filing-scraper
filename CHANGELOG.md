@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`--verify` cross-sink reconciliation.** Compares the configured sinks by filing-id set and
+  `document_sha256` (not just counts), naming missing/extra ids and hash mismatches and exiting
+  non-zero on any difference. `Sink.read_filing_digests()` is implemented for every adapter —
+  relational dialects share one query, PostgreSQL, MongoDB, ClickHouse (`FINAL`), Neo4j, and
+  SurrealDB each use their own idiom — and a sink that cannot enumerate reports `UNSUPPORTED`
+  rather than an empty list, so "no data" is never confused with "cannot tell".
+
 - **API contract fixtures and a daily canary.** `tests/test_api_contract.py` replays the HKEx
   response shapes through the real fetch path (ViewState, form POST, pagination, parsing), and
   `scripts/canary.py` + `.github/workflows/canary.yml` check the live API once a day, opening an
