@@ -15,6 +15,9 @@ pip install -e ".[dev]"
 3. Verify: `pytest`
 4. Open a PR against `main`
 
+Integration tests for PostgreSQL, SurrealDB, and dual-write are skipped unless the
+related connection variables are set — see [docs/testing.md](docs/testing.md).
+
 ## Commit Conventions
 
 - `feat:` new features

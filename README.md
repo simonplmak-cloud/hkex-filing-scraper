@@ -193,6 +193,7 @@ See [docs/postgresql.md](docs/postgresql.md) for setup, queries, and troubleshoo
 - [CLI reference](docs/cli.md)
 - [Architecture](docs/architecture.md)
 - [Troubleshooting](docs/troubleshooting.md)
+- [Testing](docs/testing.md)
 - [Upgrading](docs/upgrading.md)
 - [Releasing](docs/releasing.md)
 - [Release automation reference](docs/release-automation.md)
