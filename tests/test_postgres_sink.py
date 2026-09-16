@@ -106,6 +106,7 @@ class TestUpsertDocument:
                 "document_size": 10,
                 "document_type": "pdf",
                 "document_hash": "h",
+                "document_sha256": "s" * 64,
                 "document_text": truncated,
                 "document_text_len": len(truncated),
                 "document_tables": [{"tableIndex": 0}],
@@ -116,9 +117,12 @@ class TestUpsertDocument:
         )
         assert ok is True
         assert code == db_postgres.ERR_NONE
-        # The caller's payload is passed through unchanged.
-        assert captured["params"][3] == truncated
-        assert captured["params"][4] == len(truncated)
+        # The caller's payload is passed through unchanged; look the columns up by name so
+        # adding a column does not silently shift the assertions.
+        column = db_postgres._DOCUMENT_COLUMNS.index
+        assert captured["params"][column("document_text")] == truncated
+        assert captured["params"][column("document_text_len")] == len(truncated)
+        assert captured["params"][column("document_sha256")] == "s" * 64
 
     def test_upsert_document_missing_row_is_failure(self, monkeypatch):
         monkeypatch.setattr(db_postgres, "_PSYCOPG_AVAILABLE", True)

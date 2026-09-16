@@ -66,6 +66,7 @@ _DOCUMENT_COLUMNS = [
     "document_size",
     "document_type",
     "document_hash",
+    "document_sha256",
     "document_text",
     "document_text_len",
     "document_tables",
@@ -96,6 +97,7 @@ _DDL = [
         " document_size Nullable(Int64),"
         " document_type Nullable(String),"
         " document_hash Nullable(String),"
+        " document_sha256 Nullable(String),"
         " document_text Nullable(String),"
         " document_text_len Nullable(Int32),"
         " document_tables Nullable(String),"

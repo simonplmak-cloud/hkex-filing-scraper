@@ -256,6 +256,37 @@ def _document_type(doc_url: str) -> str:
     return "unknown"
 
 
+def document_payload(
+    fid: str,
+    raw_bytes: bytes,
+    size_bytes: int,
+    doc_url: str,
+    extracted_text: str = "",
+    tables_json: list | None = None,
+) -> Dict[str, Any]:
+    """Build the canonical document payload every sink receives.
+
+    ``document_hash`` (MD5) is an identity/dedup convenience; ``document_sha256`` is the
+    integrity hash and is what a cross-sink check compares.
+    """
+    # Sanitise tables: strip None values so option<T> fields are omitted, not null.
+    tables_list = [{k: v for k, v in tbl.items() if v is not None} for tbl in (tables_json or [])]
+    return {
+        "document_size": size_bytes,
+        "document_type": _document_type(doc_url),
+        "document_hash": (
+            hashlib.md5(raw_bytes, usedforsecurity=False).hexdigest() if raw_bytes else ""
+        ),
+        "document_sha256": hashlib.sha256(raw_bytes).hexdigest() if raw_bytes else "",
+        "document_text": extracted_text,
+        "document_text_len": len(extracted_text),
+        "document_tables": tables_list,
+        "document_table_cnt": len(tables_list),
+        "document_status": "processed",
+        "document_status_reason": "",
+    }
+
+
 def _save_document_to_filing(
     fid: str,
     raw_bytes: bytes,
@@ -270,21 +301,7 @@ def _save_document_to_filing(
     own declared limit (SurrealDB truncates for its RPC body size, relational
     sinks store the text column).
     """
-    # Sanitise tables: strip None values so option<T> fields are omitted, not null.
-    tables_list = [{k: v for k, v in tbl.items() if v is not None} for tbl in (tables_json or [])]
-    payload: Dict[str, Any] = {
-        "document_size": size_bytes,
-        "document_type": _document_type(doc_url),
-        "document_hash": (
-            hashlib.md5(raw_bytes, usedforsecurity=False).hexdigest() if raw_bytes else ""
-        ),
-        "document_text": extracted_text,
-        "document_text_len": len(extracted_text),
-        "document_tables": tables_list,
-        "document_table_cnt": len(tables_list),
-        "document_status": "processed",
-        "document_status_reason": "",
-    }
+    payload = document_payload(fid, raw_bytes, size_bytes, doc_url, extracted_text, tables_json)
 
     ok = True
     first_error = ""

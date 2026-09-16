@@ -8,12 +8,18 @@ affected-row count matters.
 
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from .. import config
 from .base import redact
 from .dialects import DuckDBDialect
 from .relational import RelationalDriver, RelationalSink
+
+# DuckDB uses optimistic concurrency: concurrent writers can fail with a transaction
+# conflict that succeeds on retry. Retry a few times with a short backoff.
+CONFLICT_RETRIES = 5
+CONFLICT_BACKOFF_SECONDS = 0.05
 
 try:  # pragma: no cover - exercised via monkeypatching in tests
     import duckdb  # type: ignore
@@ -22,6 +28,13 @@ try:  # pragma: no cover - exercised via monkeypatching in tests
 except Exception:  # pragma: no cover - depends on environment
     duckdb = None  # type: ignore
     _DUCKDB_AVAILABLE = False
+
+
+def _is_conflict(exc: Exception) -> bool:
+    """True for DuckDB's optimistic-concurrency conflict errors."""
+    name = type(exc).__name__
+    text = str(exc).lower()
+    return "transactionexception" in name.lower() or "conflict" in text or "concurrent" in text
 
 
 class _DuckDBDriver(RelationalDriver):
@@ -40,18 +53,27 @@ class _DuckDBDriver(RelationalDriver):
         self, sql: str, params: Optional[Any] = None, many: bool = False
     ) -> Tuple[bool, str, int]:
         assert self._conn is not None
-        try:
-            if many:
-                rows = list(params or [])
-                self._conn.executemany(sql, rows)
-                return True, "", len(rows)
-            cur = self._conn.execute(sql, params) if params is not None else self._conn.execute(sql)
-            if cur.description is not None:
-                # ``RETURNING`` / SELECT: the number of rows is the affected count.
-                return True, "", len(cur.fetchall())
-            return True, "", 1
-        except Exception as exc:  # noqa: BLE001 - surfaced as a code
-            return False, redact(str(exc)), 0
+        rows = list(params or []) if many else None
+        for attempt in range(CONFLICT_RETRIES + 1):
+            try:
+                if many:
+                    self._conn.executemany(sql, rows or [])
+                    return True, "", len(rows or [])
+                cur = (
+                    self._conn.execute(sql, params)
+                    if params is not None
+                    else self._conn.execute(sql)
+                )
+                if cur.description is not None:
+                    # ``RETURNING`` / SELECT: the number of rows is the affected count.
+                    return True, "", len(cur.fetchall())
+                return True, "", 1
+            except Exception as exc:  # noqa: BLE001 - surfaced as a code
+                if attempt < CONFLICT_RETRIES and _is_conflict(exc):
+                    time.sleep(CONFLICT_BACKOFF_SECONDS * (attempt + 1))
+                    continue
+                return False, redact(str(exc)), 0
+        return False, "duckdb: transaction conflict", 0  # pragma: no cover - loop always returns
 
     def fetch_all(self, sql: str, params: Optional[Any] = None) -> Tuple[List[Dict[str, Any]], str]:
         assert self._conn is not None

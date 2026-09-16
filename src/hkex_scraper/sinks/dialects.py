@@ -35,6 +35,7 @@ DOCUMENT_COLUMNS: Tuple[str, ...] = (
     "document_size",
     "document_type",
     "document_hash",
+    "document_sha256",
     "document_text",
     "document_text_len",
     "document_tables",
@@ -141,6 +142,7 @@ class Dialect:
             f"{self.q('document_size')} {self.bigint_type}, "
             f"{self.q('document_type')} {self.text_type}, "
             f"{self.q('document_hash')} {self.text_type}, "
+            f"{self.q('document_sha256')} {self.text_type}, "
             f"{self.q('document_text')} {self.long_text_type}, "
             f"{self.q('document_text_len')} {self.int_type}, "
             f"{self.q('document_tables')} {self.json_type}, "

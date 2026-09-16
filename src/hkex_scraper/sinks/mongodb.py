@@ -68,6 +68,7 @@ _DOCUMENT_FIELDS = (
     "document_size",
     "document_type",
     "document_hash",
+    "document_sha256",
     "document_text",
     "document_text_len",
     "document_tables",

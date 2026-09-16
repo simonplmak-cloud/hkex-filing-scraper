@@ -13,6 +13,8 @@ from .base import redact
 from .dialects import SQLiteDialect
 from .relational import RelationalDriver, RelationalSink
 
+BUSY_TIMEOUT_SECONDS = 30.0
+
 
 class _SQLiteDriver(RelationalDriver):
     def __init__(self, path: str) -> None:
@@ -24,9 +26,16 @@ class _SQLiteDriver(RelationalDriver):
             return
         import sqlite3
 
-        conn = sqlite3.connect(self._path)
+        conn = sqlite3.connect(self._path, timeout=BUSY_TIMEOUT_SECONDS)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        # WAL lets readers proceed while a writer holds the write lock, and the busy
+        # timeout makes a concurrent writer wait instead of failing with "database is locked".
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute(f"PRAGMA busy_timeout = {int(BUSY_TIMEOUT_SECONDS * 1000)}")
+        # `filing_id` must compare exactly; SQLite's default BINARY collation does that, but
+        # state it so a future NOCASE default cannot silently merge two records.
+        conn.execute("PRAGMA case_sensitive_like = ON")
         self._conn = conn
 
     def execute(

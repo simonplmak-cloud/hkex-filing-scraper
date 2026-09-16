@@ -142,6 +142,7 @@ class RelationalSink(Sink):
             payload.get("document_size"),
             payload.get("document_type"),
             payload.get("document_hash"),
+            payload.get("document_sha256"),
             payload.get("document_text"),
             payload.get("document_text_len"),
             payload.get("document_tables"),
