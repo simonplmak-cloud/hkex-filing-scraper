@@ -97,7 +97,7 @@ jobs:
       - name: Install it into a clean environment
         run: |
           python -m venv /tmp/wheel
-          /tmp/wheel/bin/pip install --quiet dist/*.whl "pytest>=7" duckdb
+          /tmp/wheel/bin/pip install --quiet dist/*.whl "pytest>=7" hypothesis responses duckdb
       - name: Run the suite against the installed package
         run: |
           mkdir -p /tmp/wheel-tests
