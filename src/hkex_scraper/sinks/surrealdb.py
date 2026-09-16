@@ -437,6 +437,23 @@ class SurrealDBSink(Sink):
                 return 0, code(self.id, SUFFIX_WRITE_ERROR)
         return 0, ERR_NONE
 
+    def read_filing_digests(self) -> Tuple[List[Dict[str, Any]], str]:
+        result = db.surreal_query(
+            "SELECT filingId, documentSha256 FROM exchange_filing;", timeout=120
+        )
+        if isinstance(result, dict) and result.get("error"):
+            return [], code(self.id, SUFFIX_WRITE_ERROR)
+        rows = _first_result_rows(result)
+        digests = [
+            {
+                "filing_id": str(row.get("filingId") or row.get("filingID") or ""),
+                "document_sha256": row.get("documentSha256") or "",
+            }
+            for row in rows
+        ]
+        digests.sort(key=lambda row: row["filing_id"])
+        return digests, ERR_NONE
+
     def count_filings(self) -> Tuple[int, str]:
         return self._count("SELECT count() FROM exchange_filing GROUP ALL;")
 

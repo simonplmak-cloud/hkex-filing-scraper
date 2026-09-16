@@ -285,6 +285,24 @@ class MongoDBSink(Sink):
             return 0, redact(str(exc)) or code(self.id, SUFFIX_WRITE_ERROR)
 
     # -- reads -------------------------------------------------------------
+    def read_filing_digests(self) -> Tuple[List[Dict[str, Any]], str]:
+        db, err = self._database()
+        if err:
+            return [], err
+        try:
+            cursor = db[FILING_COLLECTION].find({}, {"_id": 1, "document_sha256": 1})
+            digests = [
+                {
+                    "filing_id": str(doc.get("_id", "")),
+                    "document_sha256": doc.get("document_sha256") or "",
+                }
+                for doc in cursor
+            ]
+            digests.sort(key=lambda row: row["filing_id"])
+            return digests, ERR_NONE
+        except Exception as exc:  # noqa: BLE001
+            return [], redact(str(exc)) or code(self.id, SUFFIX_WRITE_ERROR)
+
     def count_filings(self) -> Tuple[int, str]:
         db, err = self._database()
         if err:

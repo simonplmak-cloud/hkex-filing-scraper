@@ -118,6 +118,15 @@ class Sink:
         return 0, code(self.id, SUFFIX_UNSUPPORTED)
 
     # -- reads -------------------------------------------------------------
+    def read_filing_digests(self) -> Tuple[List[Dict[str, Any]], str]:
+        """Return ``[{"filing_id": ..., "document_sha256": ...}]`` for every filing.
+
+        Optional capability: used by ``--verify`` to compare sinks semantically. Sinks that
+        cannot enumerate their records return an explicit ``UNSUPPORTED`` code rather than an
+        empty list, so a caller can tell "no data" from "cannot tell".
+        """
+        return [], code(self.id, SUFFIX_UNSUPPORTED)
+
     def count_filings(self) -> Tuple[int, str]:
         return 0, code(self.id, SUFFIX_UNSUPPORTED)
 

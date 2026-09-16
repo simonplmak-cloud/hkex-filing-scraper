@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from datetime import datetime
-from typing import Dict
+from typing import Any, Dict, List, Tuple
 
 from . import __version__, config, sinks
 from .config import LOG_DIR, MAX_DOWNLOAD_WORKERS
@@ -168,6 +168,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Test mode: fetch data but do not write to the database",
     )
     parser.add_argument(
+        "--verify",
+        action="store_true",
+        help=(
+            "Compare the configured sinks semantically (filing ids and document hashes), "
+            "then exit non-zero on any difference"
+        ),
+    )
+    parser.add_argument(
         "--coverage-report",
         action="store_true",
         help="Print historical coverage data from the read source and exit",
@@ -221,6 +229,91 @@ def _parity_report() -> None:
     sys.exit(0)
 
 
+def _format_verify_report(
+    digests: Dict[str, List[Dict[str, Any]]],
+    unsupported: Dict[str, str],
+) -> Tuple[str, bool]:
+    """Compare per-sink (filing_id, document_sha256) sets.
+
+    Returns the report text and whether every comparable sink agrees.
+    """
+    lines = ["VERIFY REPORT", "=" * 60]
+    for sink_id, rows in digests.items():
+        lines.append(f"{sinks.spec(sink_id).label} filings: {len(rows)}")
+    for sink_id, reason in unsupported.items():
+        lines.append(f"{sinks.spec(sink_id).label}: not comparable ({reason})")
+
+    if len(digests) < 2:
+        lines.append("Verify: N/A (two or more comparable sinks are required)")
+        return "\n".join(lines), True
+
+    reference_id = next(iter(digests))
+    reference = {row["filing_id"]: row["document_sha256"] for row in digests[reference_id]}
+    problems: List[str] = []
+
+    for sink_id, rows in digests.items():
+        if sink_id == reference_id:
+            continue
+        current = {row["filing_id"]: row["document_sha256"] for row in rows}
+        missing = sorted(set(reference) - set(current))
+        extra = sorted(set(current) - set(reference))
+        mismatched = sorted(
+            filing_id
+            for filing_id in set(reference) & set(current)
+            if reference[filing_id]
+            and current[filing_id]
+            and reference[filing_id] != current[filing_id]
+        )
+        label = sinks.spec(sink_id).label
+        if missing:
+            problems.append(f"{label} is missing {len(missing)} id(s), e.g. {missing[:3]}")
+        if extra:
+            problems.append(f"{label} has {len(extra)} extra id(s), e.g. {extra[:3]}")
+        if mismatched:
+            problems.append(
+                f"{label} has {len(mismatched)} hash mismatch(es), e.g. {mismatched[:3]}"
+            )
+        if not (missing or extra or mismatched):
+            lines.append(f"{label}: identical to {sinks.spec(reference_id).label}")
+
+    if problems:
+        lines.append("")
+        for problem in problems:
+            lines.append(f"WARNING: {problem}")
+        lines.append("Verify: MISMATCH")
+        return "\n".join(lines), False
+
+    lines.append("Verify: OK (ids and hashes agree)")
+    return "\n".join(lines), True
+
+
+def _verify_report() -> None:
+    log("VERIFY REPORT")
+    configured = sinks.enabled_sinks()
+    if len(configured) < 2:
+        log("ERROR: --verify requires two or more configured sinks.")
+        sys.exit(1)
+
+    digests: Dict[str, List[Dict[str, Any]]] = {}
+    unsupported: Dict[str, str] = {}
+    for sink in configured:
+        if not sink.available():
+            log(f"ERROR: {sink.unavailable_reason()}")
+            sys.exit(1)
+        rows, err_code = sink.read_filing_digests()
+        if err_code:
+            if err_code.endswith("UNSUPPORTED"):
+                unsupported[sink.id] = "cannot enumerate filings"
+                continue
+            log(f"ERROR: could not read filings from {sink.id}: {err_code[:200]}")
+            sys.exit(1)
+        digests[sink.id] = rows
+
+    report, ok = _format_verify_report(digests, unsupported)
+    print(report)
+    sys.exit(0 if ok else 1)
+
+
 def _coverage_report() -> None:
     log("COVERAGE REPORT")
     log("=" * 60)
@@ -259,6 +352,9 @@ def main() -> None:
 
         if args.parity_report:
             _parity_report()
+
+        if args.verify:
+            _verify_report()
 
         if args.coverage_report:
             _coverage_report()

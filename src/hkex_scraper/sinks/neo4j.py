@@ -296,6 +296,21 @@ class Neo4jSink(Sink):
                 return 0
         return 0
 
+    def read_filing_digests(self) -> Tuple[List[Dict[str, Any]], str]:
+        records, _summary, err = self._run(
+            "MATCH (f:Filing) RETURN f.filingId AS filing_id, f.documentSha256 AS sha "
+            "ORDER BY filing_id"
+        )
+        if err:
+            return [], err
+        return [
+            {
+                "filing_id": str(record.get("filing_id") or ""),
+                "document_sha256": record.get("sha") or "",
+            }
+            for record in records
+        ], ERR_NONE
+
     def count_filings(self) -> Tuple[int, str]:
         records, _summary, err = self._run("MATCH (f:Filing) RETURN count(f) AS count")
         if err:

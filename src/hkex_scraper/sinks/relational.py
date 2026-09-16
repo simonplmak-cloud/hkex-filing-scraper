@@ -313,6 +313,18 @@ class RelationalSink(Sink):
             params = [page_size, offset]
         return self._read(sql, params)
 
+    def read_filing_digests(self) -> Tuple[List[Dict[str, Any]], str]:
+        rows, err = self._read(self.dialect.select_digests_sql())
+        if err:
+            return [], err
+        return [
+            {
+                "filing_id": row.get("filing_id", ""),
+                "document_sha256": row.get("document_sha256") or "",
+            }
+            for row in rows
+        ], ERR_NONE
+
     def fetch_coverage(self) -> Tuple[List[Dict[str, Any]], str]:
         return self._read(self.dialect.fetch_coverage_sql())
 

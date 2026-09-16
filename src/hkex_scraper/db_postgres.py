@@ -573,6 +573,22 @@ def _fetch_scalar(sql: str, params: Optional[Any] = None) -> Tuple[Optional[Any]
         return None, _redact(str(exc)) or ERR_WRITE_ERROR
 
 
+def read_filing_digests() -> Tuple[List[Dict[str, Any]], str]:
+    """Every filing id with its integrity hash, ordered by id."""
+    rows, error = _fetch_all(
+        "SELECT filing_id, document_sha256 FROM exchange_filing ORDER BY filing_id"
+    )
+    if error:
+        return [], error
+    return [
+        {
+            "filing_id": row.get("filing_id", ""),
+            "document_sha256": row.get("document_sha256") or "",
+        }
+        for row in rows
+    ], ERR_NONE
+
+
 def count_filings() -> Tuple[int, str]:
     """Return the number of filing rows in PostgreSQL as ``(count, error_code)``."""
     value, code = _fetch_scalar("SELECT count(*) FROM exchange_filing")

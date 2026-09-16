@@ -253,6 +253,7 @@ hkex-scraper --database-target postgres,sqlite
 # Reporting
 hkex-scraper --coverage-report
 hkex-scraper --database-target postgres,sqlite --parity-report
+hkex-scraper --database-target postgres,sqlite --verify
 ```
 
 ### Command-line options
@@ -270,6 +271,7 @@ hkex-scraper --database-target postgres,sqlite --parity-report
 | `--database-target SINKS` | Override `DATABASE_TARGET` (comma-separated; valid: `postgres`, `mysql`, `sqlite`, `mongodb`, `mariadb`, `neo4j`, `clickhouse`, `duckdb`, `surrealdb`). |
 | `--coverage-report` | Print chunk coverage from the read source, then exit. |
 | `--parity-report` | Print filing counts per sink and the spread, then exit. |
+| `--verify` | Compare sinks by filing id and document hash, then exit non-zero on any difference. |
 | `--version` | Print the version and exit. |
 
 Exit code is non-zero when **any** configured sink recorded write failures.

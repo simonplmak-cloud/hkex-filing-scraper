@@ -387,6 +387,20 @@ class ClickHouseSink(Sink):
         return len(rows), ERR_NONE
 
     # -- reads -------------------------------------------------------------
+    def read_filing_digests(self) -> Tuple[List[Dict[str, Any]], str]:
+        rows, err = self._query(
+            f"SELECT filing_id, document_sha256 FROM {FILING_TABLE} FINAL ORDER BY filing_id"
+        )
+        if err:
+            return [], err
+        return [
+            {
+                "filing_id": str(row.get("filing_id", "")),
+                "document_sha256": row.get("document_sha256") or "",
+            }
+            for row in rows
+        ], ERR_NONE
+
     def count_filings(self) -> Tuple[int, str]:
         return self._scalar(f"SELECT count() AS count FROM {FILING_TABLE} FINAL")
 
