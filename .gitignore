@@ -35,3 +35,13 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Tooling caches
+.ruff_cache/
+
+# VDD process artifacts (internal; not published)
+vdd/
+
+# difflens local artifacts
+.difflens/
+
