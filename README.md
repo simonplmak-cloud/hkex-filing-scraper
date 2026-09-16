@@ -128,6 +128,7 @@ hkex-scraper --database-target both --parity-report
 | `--database-target TARGET` | Override `DATABASE_TARGET` (`surrealdb` \| `postgres` \| `both`). |
 | `--coverage-report` | Print chunk coverage from the active sink, then exit. |
 | `--parity-report` | Print filing counts per sink and the difference, then exit. |
+| `--version` | Print the version and exit. |
 
 Exit code is non-zero when a **required** sink recorded write failures (SurrealDB when enabled; PostgreSQL when it is the only sink).
 
@@ -193,6 +194,8 @@ See [docs/postgresql.md](docs/postgresql.md) for setup, queries, and troubleshoo
 - [Architecture](docs/architecture.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Upgrading](docs/upgrading.md)
+- [Releasing](docs/releasing.md)
+- [Release automation reference](docs/release-automation.md)
 - [Changelog](CHANGELOG.md)
 
 ## Development

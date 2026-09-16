@@ -19,6 +19,7 @@ hkex-scraper [options]
 | `--database-target TARGET` | `surrealdb`\|`postgres`\|`both` | from `DATABASE_TARGET` | Override the sink for this run. |
 | `--coverage-report` | flag | off | Print chunk coverage from the active sink, then exit. |
 | `--parity-report` | flag | off | Print per-sink filing counts and difference, then exit. Requires `postgres`. |
+| `--version` | flag | — | Print the version and exit. |
 
 ## Behaviour
 
@@ -51,6 +52,9 @@ hkex-scraper --dry-run --limit 10
 # Coverage and parity
 hkex-scraper --coverage-report
 hkex-scraper --database-target both --parity-report
+
+# Version
+hkex-scraper --version
 ```
 
 ## Logs
