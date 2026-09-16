@@ -132,6 +132,10 @@ class TestWcag22Specifics:
         assert "md-typeset__scrollwrap" in script
         assert 'setAttribute("tabindex", "0")' in script
         assert 'setAttribute("aria-label", "Scrollable table")' in script
+        # Material may insert the wrapper after our subscriber, so a mutation observer
+        # re-applies the attributes whenever the content changes.
+        assert "MutationObserver" in script
+        assert "observeScrollWrappers" in script
 
     def test_search_toggle_patch_is_wired_in(self):
         mkdocs = MKDOCS.read_text(encoding="utf-8")

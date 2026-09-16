@@ -29,9 +29,26 @@
     }
   }
 
+  function observeScrollWrappers() {
+    // Material inserts .md-typeset__scrollwrap during its own render pipeline, which can run
+    // after our document$ subscriber. Watch the content area and re-apply on every mutation.
+    var target = document.querySelector(".md-content") || document.body;
+    if (!target || target.getAttribute("data-a11y-observed") === "true") {
+      return;
+    }
+    target.setAttribute("data-a11y-observed", "true");
+    if (typeof MutationObserver === "function") {
+      new MutationObserver(makeScrollWrappersFocusable).observe(target, {
+        childList: true,
+        subtree: true,
+      });
+    }
+  }
+
   function enhance() {
     labelSearchToggle();
     makeScrollWrappersFocusable();
+    observeScrollWrappers();
   }
 
   enhance();
