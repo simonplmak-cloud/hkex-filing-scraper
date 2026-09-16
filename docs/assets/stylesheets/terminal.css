@@ -1,0 +1,282 @@
+/* Bloomberg-terminal theme for the docs site.
+ *
+ * Design rules:
+ * - fixed dark: no light scheme, no toggle (mkdocs.yml sets a single `slate` palette)
+ * - amber-on-black, monospace everywhere, high information density
+ * - system font stack only — no external font requests
+ * - WCAG 2.2 AA: body text >= 4.5:1, large text and UI >= 3:1, visible focus, targets >= 24px
+ *
+ * Palette contrast against the #0b0b0b page background:
+ *   #e6e6e6  15.9:1   body text
+ *   #cfcfcf  12.5:1   secondary text
+ *   #b0b0b0   9.0:1   muted text
+ *   #ffb000  10.6:1   headings, links, accents
+ *   #ffd580  12.1:1   inline code
+ *   #7ee787  10.4:1   "shipped" / success
+ *   #ff8a7a   8.5:1   danger
+ * The values are asserted by tests/test_theme.py.
+ */
+
+:root {
+  --term-bg: #0b0b0b;
+  --term-surface: #111111;
+  --term-surface-2: #161616;
+  --term-rule: #2a2a2a;
+  --term-rule-strong: #3d3d3d;
+  --term-text: #e6e6e6;
+  --term-text-2: #cfcfcf;
+  --term-muted: #b0b0b0;
+  --term-amber: #ffb000;
+  --term-amber-soft: #ffd580;
+  --term-green: #7ee787;
+  --term-red: #ff8a7a;
+
+  --term-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas,
+    "DejaVu Sans Mono", "Liberation Mono", monospace;
+
+  /* Material overrides */
+  --md-text-font-family: var(--term-mono);
+  --md-code-font-family: var(--term-mono);
+  --md-typeset-font-size: 0.72rem;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-hue: 0;
+
+  --md-default-bg-color: var(--term-bg);
+  --md-default-bg-color--light: var(--term-surface);
+  --md-default-bg-color--lighter: var(--term-surface-2);
+  --md-default-bg-color--lightest: var(--term-rule);
+
+  --md-default-fg-color: var(--term-text);
+  --md-default-fg-color--light: var(--term-text-2);
+  --md-default-fg-color--lighter: var(--term-muted);
+  --md-default-fg-color--lightest: var(--term-rule);
+
+  --md-primary-fg-color: var(--term-bg);
+  --md-primary-bg-color: var(--term-amber);
+  --md-accent-fg-color: var(--term-amber-soft);
+
+  --md-typeset-color: var(--term-text);
+  --md-typeset-a-color: var(--term-amber);
+  --md-typeset-mark-color: #4a3a00;
+
+  --md-code-bg-color: var(--term-surface-2);
+  --md-code-fg-color: var(--term-amber-soft);
+  --md-code-hl-color: rgba(255, 176, 0, 0.15);
+  --md-code-hl-number-color: var(--term-amber-soft);
+  --md-code-hl-string-color: var(--term-green);
+  --md-code-hl-keyword-color: var(--term-amber);
+  --md-code-hl-comment-color: var(--term-muted);
+
+  --md-admonition-bg-color: var(--term-surface);
+  --md-footer-bg-color: var(--term-surface);
+  --md-footer-fg-color: var(--term-text-2);
+}
+
+/* Square, dense, and ruled — the terminal look. */
+body,
+.md-typeset {
+  font-feature-settings: "tnum" 1, "liga" 0;
+  letter-spacing: 0;
+}
+
+.md-header {
+  border-bottom: 2px solid var(--term-amber);
+}
+
+.md-tabs {
+  border-bottom: 1px solid var(--term-rule);
+}
+
+/* Uppercase section labels, tighter leading, amber rules. */
+.md-typeset h1 {
+  color: var(--term-amber);
+  font-size: 1.9rem;
+  letter-spacing: 0.01em;
+}
+
+.md-typeset h2 {
+  color: var(--term-amber);
+  font-size: 1.15rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--term-rule);
+  padding-bottom: 0.25rem;
+  margin-top: 1.6rem;
+}
+
+.md-typeset h3 {
+  color: var(--term-amber-soft);
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.md-typeset h4,
+.md-typeset h5,
+.md-typeset h6 {
+  color: var(--term-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.md-typeset {
+  line-height: 1.55;
+}
+
+.md-typeset p,
+.md-typeset li {
+  color: var(--term-text);
+}
+
+/* Links: amber, underlined on hover/focus so colour is never the only cue. */
+.md-typeset a {
+  color: var(--term-amber);
+  text-decoration: none;
+}
+
+.md-typeset a:hover,
+.md-typeset a:focus {
+  color: var(--term-amber-soft);
+  text-decoration: underline;
+}
+
+.md-typeset a:focus-visible,
+.md-nav__link:focus-visible,
+.md-search__input:focus-visible,
+.md-header__button:focus-visible,
+.md-footer__link:focus-visible {
+  outline: 2px solid var(--term-amber);
+  outline-offset: 2px;
+}
+
+/* Code: framed blocks, dense gutter. */
+.md-typeset code {
+  border: 1px solid var(--term-rule);
+  border-radius: 0;
+  padding: 0.08em 0.3em;
+}
+
+.md-typeset pre > code,
+.md-typeset .highlight code {
+  border: 1px solid var(--term-rule);
+  border-left: 3px solid var(--term-amber);
+  padding: 0.7rem 0.9rem;
+}
+
+.md-typeset .md-clipboard {
+  color: var(--term-muted);
+}
+
+/* Tables: condensed, ruled, amber header. */
+.md-typeset table:not([class]) {
+  border: 1px solid var(--term-rule-strong);
+  font-size: 0.7rem;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--term-surface);
+  color: var(--term-amber);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--term-rule-strong);
+}
+
+.md-typeset table:not([class]) td {
+  border-top: 1px solid var(--term-rule);
+  padding: 0.35em 0.6em;
+}
+
+.md-typeset table:not([class]) tr:hover {
+  background-color: var(--term-surface);
+}
+
+/* Admonitions: terminal panels. */
+.md-typeset .admonition,
+.md-typeset details {
+  background-color: var(--term-surface);
+  border: 1px solid var(--term-rule);
+  border-left: 3px solid var(--term-amber);
+  border-radius: 0;
+  box-shadow: none;
+  font-size: 0.72rem;
+}
+
+.md-typeset .admonition-title,
+.md-typeset summary {
+  background-color: transparent;
+  color: var(--term-amber);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Navigation: dense rows, amber active state, >= 24px targets (WCAG 2.2 §2.5.8). */
+.md-nav {
+  font-size: 0.68rem;
+}
+
+.md-nav__link {
+  min-height: 1.5rem;
+  display: flex;
+  align-items: center;
+  padding: 0.15rem 0;
+}
+
+.md-nav__link--active,
+.md-nav__link--active:hover,
+.md-nav__item .md-nav__link--active {
+  color: var(--term-amber);
+  font-weight: 700;
+}
+
+.md-nav__title {
+  color: var(--term-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Search: dark input with an amber caret. */
+.md-search__input {
+  background-color: var(--term-surface);
+  color: var(--term-text);
+  border: 1px solid var(--term-rule);
+  border-radius: 0;
+}
+
+.md-search__input::placeholder {
+  color: var(--term-muted);
+}
+
+.md-search__input:focus {
+  border-color: var(--term-amber);
+}
+
+/* Mermaid diagrams inherit the palette rather than the default light theme. */
+.md-typeset .mermaid {
+  text-align: center;
+}
+
+/* Scrollbars (WebKit) to keep the terminal feel. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--term-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--term-rule-strong);
+  border-radius: 0;
+}
+
+/* Respect the user's motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
