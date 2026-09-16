@@ -6,7 +6,11 @@ Configuration is read from environment variables. A `.env` file in the **current
 
 | Variable | Default | Description |
 | -------- | ------- | ----------- |
-| `DATABASE_TARGET` | `surrealdb` | Which sink(s) to write: `surrealdb`, `postgres`, or `both`. Aliases: `postgresql`/`pg`, `dual`. Unrecognised values fall back to `surrealdb`. |
+| `DATABASE_TARGET` | **required** | Comma-separated, ordered list of sink ids. Valid: `postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb`. Example: `postgres,sqlite`. There is no default; an unset or unknown value fails fast. Reads are served by the first configured sink that supports them. |
+
+Every configured sink is **required**: if any sink's write fails, the run exits non-zero.
+
+See [docs/backends/README.md](backends/README.md) for the support matrix.
 
 ## SurrealDB
 
@@ -36,12 +40,79 @@ Required when `DATABASE_TARGET` includes `postgres`.
 | `POSTGRES_MIN_POOL` | `1` | Minimum pool connections. |
 | `POSTGRES_MAX_POOL` | `15` | Maximum pool connections. |
 
+## MySQL / MariaDB
+
+Required when `DATABASE_TARGET` includes `mysql` (or `mariadb`). Install the driver with
+`pip install ".[mysql]"`.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `MYSQL_DSN` | — | Full DSN, e.g. `mysql://user:pass@host:3306/db`. Takes precedence over discrete settings. |
+| `MYSQL_HOST` | — | Host. |
+| `MYSQL_PORT` | `3306` | Port. |
+| `MYSQL_DATABASE` | — | Database name. |
+| `MYSQL_USER` | — | User. |
+| `MYSQL_PASSWORD` | — | Password. |
+| `MARIADB_DSN` / `MARIADB_HOST` / `MARIADB_PORT` / `MARIADB_DATABASE` / `MARIADB_USER` / `MARIADB_PASSWORD` | — | The `mariadb` sink uses these and falls back to the matching `MYSQL_*` variable when unset. |
+
+## SQLite
+
+Required when `DATABASE_TARGET` includes `sqlite`. No extra dependency (stdlib `sqlite3`).
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `SQLITE_PATH` | — | Filesystem path to the database file, or `:memory:` for an ephemeral database. |
+
+## DuckDB
+
+Required when `DATABASE_TARGET` includes `duckdb`. Install the driver with
+`pip install ".[duckdb]"`.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `DUCKDB_PATH` | — | Filesystem path to the database file, or `:memory:`. |
+
+## MongoDB
+
+Required when `DATABASE_TARGET` includes `mongodb`. Install the driver with
+`pip install ".[mongodb]"`.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `MONGODB_URI` | — | Connection URI, e.g. `mongodb://user:pass@host:27017/?authSource=admin`. |
+| `MONGODB_DATABASE` | — | Database name. |
+
+## ClickHouse
+
+Required when `DATABASE_TARGET` includes `clickhouse`. Install the driver with
+`pip install ".[clickhouse]"`.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `CLICKHOUSE_HOST` | — | Host. |
+| `CLICKHOUSE_PORT` | `8123` | HTTP port. |
+| `CLICKHOUSE_DATABASE` | — | Database name (must exist). |
+| `CLICKHOUSE_USER` | `default` | User. |
+| `CLICKHOUSE_PASSWORD` | — | Password. |
+
+## Neo4j
+
+Required when `DATABASE_TARGET` includes `neo4j`. Install the driver with
+`pip install ".[neo4j]"`.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `NEO4J_URI` | — | Bolt URI, e.g. `bolt://localhost:7687`. |
+| `NEO4J_USER` | — | User. |
+| `NEO4J_PASSWORD` | — | Password. |
+| `NEO4J_DATABASE` | — | Database name; omit for the server default. |
+
 ## Graph linking
 
 | Variable | Default | Description |
 | -------- | ------- | ----------- |
-| `COMPANY_TABLE` | — | SurrealDB company table name. When empty, graph linking is disabled. |
-| `COMPANY_ID_PATTERN` | `{code}_{exchange}` | Pattern that converts a ticker (`0451.HK`) into a company record ID (`451_HK`). |
+| `COMPANY_TABLE` | — | Company table name. When empty, graph linking is disabled. |
+| `COMPANY_ID_PATTERN` | `{code}_{exchange}` | Pattern that converts a ticker (`0451.HK`) into a company key (`451_HK`). |
 
 ## Performance
 
@@ -53,7 +124,7 @@ Required when `DATABASE_TARGET` includes `postgres`.
 
 1. `--database-target` command-line override (highest).
 2. Environment variables / `.env`.
-3. Built-in defaults.
+3. No implicit sink default — `DATABASE_TARGET` must be set.
 
 ## Constants (not configurable)
 

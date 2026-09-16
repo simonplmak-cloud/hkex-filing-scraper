@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Tier 2 sinks: MongoDB, DuckDB, ClickHouse, Neo4j.** Four more backends implement the same `Sink` contract, each an optional extra with a guarded import:
+  - `duckdb` (MIT; `duckdb` extra) — in-process analytical SQL, `ON CONFLICT` upserts, JSON columns, PK-only schema.
+  - `mongodb` (SSPL, source-available; `mongodb` extra) — document model, collections keyed on `_id`, `$set` upserts; metadata and document writes never touch each other's fields.
+  - `clickhouse` (Apache-2.0; `clickhouse` extra) — columnar `ReplacingMergeTree`; declares `native_upsert=False` and uses read-merge-reinsert so metadata and document writes preserve each other; reads use `FINAL`.
+  - `neo4j` (GPLv3 Community; `neo4j` extra) — graph model with `(:Company)-[:HAS_FILING]->(:Filing)` and `(:Filing)-[:REFERENCES_FILING]->(:Company)`, all writes via `MERGE`; `documentTables` stored as JSON.
+- **Uniform sink architecture.** A new `sinks/` package defines one destination contract (`Sink`), declared capabilities (`SinkCapabilities`), and a lazy registry, so the pipeline, graph linker, and CLI no longer branch on a destination name. Backends are hand-written adapters plus a small SQL dialect descriptor; there is no ORM.
+- **MySQL and MariaDB sinks** (`mysql`, `mariadb`) via the optional `PyMySQL` driver (`pip install ".[mysql]"`), with `ON DUPLICATE KEY UPDATE` upserts and `INSERT IGNORE` edge inserts.
+- **SQLite sink** (`sqlite`) using the standard-library `sqlite3` driver — no extra dependency.
+- Per-sink capability model (upsert, reads, edges, JSON, arrays, limits) and a support matrix at `docs/backends/README.md`.
+- `docs/adr/0002-multi-sink-architecture.md`, `docs/adr/0003-sink-support-policy.md`, and per-backend guides under `docs/backends/` (mysql, sqlite, duckdb, mongodb, clickhouse, neo4j).
+- CI job `integration-tier2` running MongoDB, ClickHouse, and Neo4j service containers.
+
+### Changed
+
+- **Breaking:** `DATABASE_TARGET` is now an explicit, ordered, comma-separated list of sink ids (`postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb`). The `both`/`dual` aliases and the implicit `surrealdb` default are removed; an unset or unknown value fails fast with an actionable message.
+- **Breaking:** reads are served by the first configured sink that supports reads; there is no per-sink read branch and no `READ_SOURCE` variable.
+- Every explicitly configured sink is now required: any sink's write failure marks the run non-zero (previously a non-sole PostgreSQL sink could fail without failing the run). Failure isolation is unchanged.
+- `--parity-report` is now N-way: it prints a filing count per sink and the spread between the maximum and minimum.
+- SurrealDB RPC body-size truncation moved from the pipeline into the SurrealDB sink; the pipeline now builds one canonical payload and each sink applies its own declared limit.
+
+### Fixed
+
+- Integration fixtures now initialise the schema of **every** configured sink (matching `main()`), fixing "no such table" failures when a second sink was configured during tests.
+
 ## [1.1.0] - 2026-09-16
 
 ### Added

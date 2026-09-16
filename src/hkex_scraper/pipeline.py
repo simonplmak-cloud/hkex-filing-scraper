@@ -1,30 +1,27 @@
-"""Pipeline orchestration: Phase 1 (metadata scrape) and Phase 2 (document backfill)."""
+"""Pipeline orchestration: Phase 1 (metadata scrape) and Phase 2 (document backfill).
+
+The pipeline builds canonical records once and hands them to every configured
+sink. It never branches on a destination name.
+"""
 
 from __future__ import annotations
 
 import hashlib
 import io
-import json
 import sys
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from typing import List, Tuple
+from typing import Any, Dict, List, Tuple
 
-from . import config, db_postgres
+from . import sinks
 from .api import REQUESTS_AVAILABLE, fetch_chunk_via_api, generate_monthly_chunks
-from .config import (
-    MAX_DOWNLOAD_SIZE,
-    MAX_DOWNLOAD_WORKERS,
-    MAX_RPC_BODY_SIZE,
-    MAX_SQL_BODY_SIZE,
-)
-from .db import surreal_query, surreal_rpc, upsert_batch_with_retry
+from .config import MAX_DOWNLOAD_SIZE, MAX_DOWNLOAD_WORKERS
 from .extractor import extract_content_with_tables
+from .sinks import Sink
 from .utils import (
     classify_filing,
-    escape_sql,
     extract_issuer_name,
     extract_referenced_tickers,
     is_derivative_issuer_filing,
@@ -41,63 +38,38 @@ SUPPORTED_EXTENSIONS = (".pdf", ".htm", ".html", ".xlsx", ".xls", ".doc", ".docx
 # ---------------------------------------------------------------------------
 # Per-sink write accounting
 # ---------------------------------------------------------------------------
-SINK_STATS: dict = {
-    "surrealdb": {"ok": 0, "failed": 0},
-    "postgres": {"ok": 0, "failed": 0},
-}
-_pg_unavailable_warned = False
+SINK_STATS: Dict[str, Dict[str, int]] = {}
+# Sink ids already warned about for being unavailable.
+_UNAVAILABLE_WARNED: set[str] = set()
 
 
 def reset_sink_stats() -> None:
     """Reset per-sink counters (called once at the start of a run)."""
-    for stats in SINK_STATS.values():
-        stats["ok"] = 0
-        stats["failed"] = 0
+    SINK_STATS.clear()
+    _UNAVAILABLE_WARNED.clear()
+    for sink in sinks.enabled_sinks():
+        SINK_STATS.setdefault(sink.id, {"ok": 0, "failed": 0})
 
 
-def record_sink(sink: str, ok: bool, count: int = 1) -> None:
-    bucket = SINK_STATS.setdefault(sink, {"ok": 0, "failed": 0})
+def record_sink(sink_id: str, ok: bool, count: int = 1) -> None:
+    bucket = SINK_STATS.setdefault(sink_id, {"ok": 0, "failed": 0})
     if ok:
         bucket["ok"] += count
     else:
         bucket["failed"] += count
 
 
-def _pg_unavailable_message() -> str:
-    if not db_postgres.driver_installed():
-        return (
-            "  PostgreSQL sink enabled but the psycopg driver is not installed; "
-            'skipping PostgreSQL writes (install with: pip install ".[postgres]")'
-        )
-    return (
-        "  PostgreSQL sink enabled but no connection details are configured "
-        "(set POSTGRES_DSN or POSTGRES_* in .env); skipping PostgreSQL writes"
-    )
-
-
-def warn_pg_unavailable_once() -> None:
-    global _pg_unavailable_warned
-    if not _pg_unavailable_warned:
-        log(_pg_unavailable_message())
-        _pg_unavailable_warned = True
-
-
-def _parse_filing_date(date_str: str):
-    """Parse a ``DD/MM/YYYY`` API date into a ``datetime`` (or ``None``)."""
-    if not date_str:
-        return None
-    try:
-        dd, mm, yyyy = date_str.split("/")
-        return datetime(int(yyyy), int(mm), int(dd))
-    except Exception:
-        return None
+def warn_sink_unavailable_once(sink: Sink) -> None:
+    """Log one actionable warning per unavailable sink."""
+    if sink.id in _UNAVAILABLE_WARNED:
+        return
+    _UNAVAILABLE_WARNED.add(sink.id)
+    log(f"  {sink.unavailable_reason()}; skipping {sink.id} writes")
 
 
 def sink_exit_code() -> int:
-    """Non-zero when a required sink recorded at least one failure."""
-    if config.surrealdb_enabled() and SINK_STATS["surrealdb"]["failed"] > 0:
-        return 1
-    if config.postgres_required() and SINK_STATS["postgres"]["failed"] > 0:
+    """Non-zero when any configured sink recorded at least one failure."""
+    if any(stats["failed"] > 0 for stats in SINK_STATS.values()):
         return 1
     return 0
 
@@ -110,6 +82,21 @@ def log_sink_summary() -> None:
             parts.append(f"{name}: {stats['ok']} ok / {stats['failed']} failed")
     if parts:
         log("Sink writes: " + "; ".join(parts))
+
+
+def _configured_sinks() -> List[Sink]:
+    return sinks.enabled_sinks()
+
+
+def _parse_filing_date(date_str: str):
+    """Parse a ``DD/MM/YYYY`` API date into a ``datetime`` (or ``None``)."""
+    if not date_str:
+        return None
+    try:
+        dd, mm, yyyy = date_str.split("/")
+        return datetime(int(yyyy), int(mm), int(dd))
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -163,123 +150,102 @@ def _download_worker(args: Tuple[str, str]) -> Tuple[str, str, bytes, int, str]:
 
 
 # ---------------------------------------------------------------------------
+# Canonical record construction
+# ---------------------------------------------------------------------------
+
+
+def filing_id_for(filing: Dict[str, Any]) -> str:
+    """Return the stable filing identifier used as the upsert key everywhere."""
+    return hashlib.md5(
+        f"{filing['stockCode']}{filing['date']}{filing.get('title', '')}".encode()
+    ).hexdigest()[:16]
+
+
+def _filing_record(f: Dict[str, Any]) -> Dict[str, Any]:
+    """Build the canonical filing record shared by every sink."""
+    fid = filing_id_for(f)
+    title_str = f.get("title", "")
+    filing_type, filing_subtype = classify_filing(title_str)
+    raw_code = str(f["stockCode"]).lstrip("0") or "0"
+
+    filing_category = "LISTED_COMPANY"
+    if (not f["stockCode"].strip()) and is_derivative_issuer_filing(title_str):
+        issuer_short = extract_issuer_name(title_str)
+        ticker = f"{issuer_short}_DERIV.HK"
+        filing_category = "DERIVATIVE_ISSUER"
+    elif not f["stockCode"].strip():
+        ticker = "UNKNOWN.HK"
+        filing_category = "UNKNOWN"
+    else:
+        ticker = f"{raw_code.zfill(4)}.HK"
+
+    return {
+        "filing_id": fid,
+        "company_ticker": ticker,
+        "stock_code": f["stockCode"],
+        "stock_name": squash_ws(f.get("stockName", "")) or None,
+        "exchange": "HK",
+        "filing_type": filing_type,
+        "filing_subtype": filing_subtype or None,
+        "filing_category": filing_category,
+        "title": squash_ws(title_str) or None,
+        "filing_date": _parse_filing_date(f.get("date", "")),
+        "document_url": f.get("link", "") or None,
+        "referenced_tickers": extract_referenced_tickers(title_str, str(f["stockCode"])),
+        "source": "HKEx",
+        "updated_at": datetime.now(timezone.utc),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Save helpers
 # ---------------------------------------------------------------------------
 
 
 def _save_filings_batch_metadata(filings: list, dry_run: bool = False) -> int:
-    """Save filing metadata in batches. Phase 1 operation."""
+    """Save filing metadata in batches to every configured sink. Phase 1 operation."""
     if not filings:
         return 0
     if dry_run:
         log(f" [DRY-RUN] Would save {len(filings)} filings (metadata)")
         return len(filings)
 
-    sql_statements: List[str] = []
-    pg_records: List[dict] = []
-    for f in filings:
-        fid = hashlib.md5(f"{f['stockCode']}{f['date']}{f.get('title', '')}".encode()).hexdigest()[
-            :16
-        ]
-
-        title_str = f.get("title", "")
-        ft, fs = classify_filing(title_str)
-        date_str = f.get("date", "")
-        filing_date_expr = "NULL"
-        if date_str:
-            try:
-                dd, mm, yyyy = date_str.split("/")
-                filing_date_expr = f"d'{yyyy}-{mm}-{dd}'"
-            except Exception:
-                filing_date_expr = "NULL"
-        filing_date_value = _parse_filing_date(date_str)
-
-        raw_code = str(f["stockCode"]).lstrip("0") or "0"
-
-        # Detect derivative issuer filings (empty stock code + matching title)
-        filing_category = "LISTED_COMPANY"  # default
-        if (not f["stockCode"].strip()) and is_derivative_issuer_filing(title_str):
-            issuer_short = extract_issuer_name(title_str)
-            ticker = f"{issuer_short}_DERIV.HK"
-            filing_category = "DERIVATIVE_ISSUER"
-        elif not f["stockCode"].strip():
-            ticker = "UNKNOWN.HK"
-            filing_category = "UNKNOWN"
+    records = [_filing_record(f) for f in filings]
+    written_values: List[int] = []
+    for sink in _configured_sinks():
+        if not sink.available():
+            warn_sink_unavailable_once(sink)
+            continue
+        try:
+            written, err_code = sink.upsert_filings(records)
+        except Exception as exc:  # noqa: BLE001 - one sink must not abort another
+            record_sink(sink.id, False, len(records))
+            log(f"  {sink.id} metadata batch raised: {type(exc).__name__}: {exc}")
+            continue
+        if err_code:
+            record_sink(sink.id, False, len(records))
+            log(f"  {sink.id} metadata batch failed ({len(records)} records): {err_code[:200]}")
         else:
-            ticker = f"{raw_code.zfill(4)}.HK"
+            record_sink(sink.id, True, written)
+        written_values.append(written)
 
-        doc_url = f.get("link", "")
-
-        ref_tickers = extract_referenced_tickers(title_str, str(f["stockCode"]))
-        ref_tickers_json = json.dumps(ref_tickers)
-
-        sql_statements.append(
-            "UPSERT exchange_filing:{fid} SET\n"
-            "  filingId       = '{fid}',\n"
-            "  companyTicker  = '{ticker}',\n"
-            "  stockCode      = '{stockCode}',\n"
-            "  stockName      = '{stockName}',\n"
-            "  exchange       = 'HK',\n"
-            "  filingType     = '{ft}',\n"
-            "  filingSubtype  = '{fs}',\n"
-            "  filingCategory = '{filingCategory}',\n"
-            "  title          = '{title}',\n"
-            "  filingDate     = {filingDateExpr},\n"
-            "  documentUrl    = '{docUrl}',\n"
-            "  referencedTickers = {refTickers},\n"
-            "  source         = 'HKEx',\n"
-            "  updatedAt      = time::now()\n"
-            "RETURN NONE;\n".format(
-                fid=fid,
-                ticker=ticker,
-                stockCode=escape_sql(f["stockCode"]),
-                stockName=escape_sql(squash_ws(f.get("stockName", ""))),
-                ft=ft,
-                fs=escape_sql(fs),
-                filingCategory=filing_category,
-                title=escape_sql(squash_ws(title_str)),
-                filingDateExpr=filing_date_expr,
-                docUrl=escape_sql(doc_url),
-                refTickers=ref_tickers_json,
-            )
-        )
-        pg_records.append(
-            {
-                "filing_id": fid,
-                "company_ticker": ticker,
-                "stock_code": f["stockCode"],
-                "stock_name": squash_ws(f.get("stockName", "")) or None,
-                "exchange": "HK",
-                "filing_type": ft,
-                "filing_subtype": fs or None,
-                "filing_category": filing_category,
-                "title": squash_ws(title_str) or None,
-                "filing_date": filing_date_value,
-                "document_url": doc_url or None,
-                "referenced_tickers": ref_tickers,
-                "source": "HKEx",
-                "updated_at": datetime.now(timezone.utc),
-            }
-        )
-
-    saved_count = len(sql_statements)
-    if config.surrealdb_enabled():
-        saved_count = upsert_batch_with_retry(sql_statements)
-        record_sink("surrealdb", saved_count == len(sql_statements), len(sql_statements))
-        if saved_count < len(sql_statements):
-            log(f"  Saved {saved_count} / {len(sql_statements)} filings after retries")
-
-    if config.postgres_enabled():
-        if not db_postgres.postgres_available():
-            warn_pg_unavailable_once()
-        else:
-            written, code = db_postgres.upsert_filings(pg_records)
-            if code:
-                record_sink("postgres", False, len(pg_records))
-                log(f"  PostgreSQL metadata batch failed ({len(pg_records)} records): {code[:200]}")
-            else:
-                record_sink("postgres", True, written)
+    saved_count = max(written_values) if written_values else 0
+    if written_values and saved_count < len(records):
+        log(f"  Saved {saved_count} / {len(records)} filings on the leading sink")
     return saved_count
+
+
+def _document_type(doc_url: str) -> str:
+    ext = doc_url.lower().split("?")[0].split("#")[0]
+    if ext.endswith(".pdf"):
+        return "pdf"
+    if ext.endswith(".htm") or ext.endswith(".html"):
+        return "html"
+    if ext.endswith(".xlsx") or ext.endswith(".xls"):
+        return "xlsx"
+    if ext.endswith(".doc") or ext.endswith(".docx"):
+        return "docx"
+    return "unknown"
 
 
 def _save_document_to_filing(
@@ -290,344 +256,70 @@ def _save_document_to_filing(
     extracted_text: str = "",
     tables_json: list | None = None,
 ) -> Tuple[bool, str]:
-    """Save extracted text + metadata to an existing filing record.
+    """Save extracted text + metadata to an existing filing on every configured sink.
 
-    Uses the SurrealDB ``/rpc`` endpoint with parameterised queries.  This
-    gives us a 4 MiB body limit (vs 1 MiB for ``/sql``) AND eliminates SQL
-    string escaping overhead entirely — document text and tables are passed
-    as native JSON values in the RPC vars, not embedded inside a SQL string
-    literal.
-
-    For the rare case where a document still exceeds the 4 MiB RPC limit,
-    we fall back to pre-truncation.
+    The canonical payload carries the full text and tables; each sink applies its
+    own declared limit (SurrealDB truncates for its RPC body size, relational
+    sinks store the text column).
     """
-    ext = doc_url.lower().split("?")[0].split("#")[0]
-    if ext.endswith(".pdf"):
-        doc_type = "pdf"
-    elif ext.endswith(".htm") or ext.endswith(".html"):
-        doc_type = "html"
-    elif ext.endswith(".xlsx") or ext.endswith(".xls"):
-        doc_type = "xlsx"
-    elif ext.endswith(".doc") or ext.endswith(".docx"):
-        doc_type = "docx"
-    else:
-        doc_type = "unknown"
-
-    doc_hash = hashlib.md5(raw_bytes).hexdigest() if raw_bytes else ""
-    # Sanitise tables: strip None values from each table dict.
-    # SurrealDB SCHEMAFULL rejects JSON null for option<T> fields via /rpc,
-    # but accepts the field being omitted entirely.
+    # Sanitise tables: strip None values so option<T> fields are omitted, not null.
     tables_list = [{k: v for k, v in tbl.items() if v is not None} for tbl in (tables_json or [])]
-    tables_count = len(tables_list)
-    original_text_len = len(extracted_text)
-    text_to_save = extracted_text
-    was_truncated = False
-
-    # --- Pre-truncation: estimate JSON-RPC payload size ---
-    # The /rpc endpoint has a 4 MiB body limit.  The payload is a JSON object
-    # containing the SQL template + vars (text, tables, etc.).
-    # No SQL escaping overhead — text is a native JSON string value.
-    # JSON string escaping adds ~2-5% for typical text (quotes, backslashes,
-    # control chars become \uXXXX).  We use a 1.05x safety multiplier.
-    RPC_OVERHEAD = 2048  # bytes for the JSON-RPC wrapper + SQL template
-    tables_json_str = json.dumps(tables_list, ensure_ascii=False)
-    tables_bytes = len(tables_json_str.encode("utf-8"))
-    text_bytes_est = int(len(text_to_save.encode("utf-8")) * 1.05)
-    estimated_total = text_bytes_est + tables_bytes + RPC_OVERHEAD
-
-    if estimated_total > MAX_RPC_BODY_SIZE:
-        # Try truncating text only first (keep all tables)
-        available_for_text = MAX_RPC_BODY_SIZE - tables_bytes - RPC_OVERHEAD
-        if available_for_text > 100_000:  # at least 100 KB of text is useful
-            target_chars = int(available_for_text / 1.05)
-            text_to_save = extracted_text[:target_chars]
-            last_nl = text_to_save.rfind("\n")
-            if last_nl > target_chars // 2:
-                text_to_save = text_to_save[:last_nl]
-            was_truncated = True
-            log(
-                f"  Pre-truncated text for {fid}: {original_text_len} -> {len(text_to_save)} chars "
-                f"(tables: {tables_bytes} bytes, {tables_count} tables kept)"
-            )
-        else:
-            # Tables alone are too large — trim tables to ~1 MB, then truncate text
-            max_tables_bytes = 1_000_000
-            kept_tables: list = []
-            running_size = 2  # for '[]'
-            for tbl in tables_list:
-                tbl_json = json.dumps(tbl, ensure_ascii=False)
-                if running_size + len(tbl_json.encode("utf-8")) + 2 > max_tables_bytes:
-                    break
-                kept_tables.append(tbl)
-                running_size += len(tbl_json.encode("utf-8")) + 2
-            tables_list = kept_tables
-            tables_json_str = json.dumps(tables_list, ensure_ascii=False)
-            tables_bytes = len(tables_json_str.encode("utf-8"))
-            tables_count = len(tables_list)
-
-            available_for_text = MAX_RPC_BODY_SIZE - tables_bytes - RPC_OVERHEAD
-            target_chars = max(int(available_for_text / 1.05), 100_000)
-            text_to_save = extracted_text[:target_chars]
-            last_nl = text_to_save.rfind("\n")
-            if last_nl > target_chars // 2:
-                text_to_save = text_to_save[:last_nl]
-            was_truncated = True
-            log(
-                f"  Pre-truncated text+tables for {fid}: "
-                f"text {original_text_len} -> {len(text_to_save)} chars, "
-                f"tables {len(tables_json or [])} -> {tables_count}"
-            )
-
-    # --- Build the parameterised RPC query ---
-    # The SQL uses $variables which are bound to the vars dict.
-    # This means text and tables are NEVER embedded in the SQL string.
-    # The filing ID is embedded directly in the SQL (it's small and safe).
-    # Only the large payloads (text, tables) are parameterised via $vars.
-    # Note: type::thing('exchange_filing', $fid) requires $fid to be an int,
-    # but our IDs are numeric strings — so we use the direct record syntax.
-    sql_template = (
-        f"UPDATE exchange_filing:{fid} SET "
-        "documentSize = $doc_size, "
-        "documentType = $doc_type, "
-        "documentHash = $doc_hash, "
-        "documentText = $doc_text, "
-        "documentTextLen = $doc_text_len, "
-        "documentTables = $doc_tables, "
-        "documentTableCnt = $doc_table_cnt, "
-        "documentStatus = $doc_status, "
-        "documentStatusReason = $doc_reason, "
-        "updatedAt = time::now() "
-        "RETURN NONE;"
-    )
-
-    status = "processed"
-    reason = f"truncated_from_{original_text_len}" if was_truncated else ""
-
-    vars_dict = {
-        "doc_size": size_bytes,
-        "doc_type": doc_type,
-        "doc_hash": doc_hash,
-        "doc_text": text_to_save,
-        "doc_text_len": len(text_to_save),
-        "doc_tables": tables_list,
-        "doc_table_cnt": tables_count,
-        "doc_status": status,
-        "doc_reason": reason,
+    payload: Dict[str, Any] = {
+        "document_size": size_bytes,
+        "document_type": _document_type(doc_url),
+        "document_hash": hashlib.md5(raw_bytes).hexdigest() if raw_bytes else "",
+        "document_text": extracted_text,
+        "document_text_len": len(extracted_text),
+        "document_tables": tables_list,
+        "document_table_cnt": len(tables_list),
+        "document_status": "processed",
+        "document_status_reason": "",
     }
 
-    def _is_body_too_large(result: dict) -> bool:
-        """Detect body-too-large errors including connection resets."""
-        if not isinstance(result, dict):
-            return False
-        err = str(result.get("error", ""))
-        if "413" in err:
-            return True
-        if any(
-            sig in err
-            for sig in [
-                "10053",
-                "10054",
-                "ECONNRESET",
-                "Connection aborted",
-                "Connection reset",
-                "RemoteDisconnected",
-                "BrokenPipeError",
-            ]
-        ):
-            return True
-        return False
-
-    def _is_record_link_error(result: dict) -> bool:
-        """Detect SurrealDB record-link misinterpretation errors.
-
-        The /rpc endpoint parses JSON string values matching ``word:word``
-        as record links instead of plain strings.  When this happens the
-        error message contains phrases like ``expected a option<string>``
-        or ``expected a option<array<string>>``.
-        """
-        if not isinstance(result, dict):
-            return False
-        err = str(result.get("error", ""))
-        return "expected a option<" in err
-
-    def _save_via_sql(
-        text: str, tables: list, status_val: str, reason_val: str
-    ) -> Tuple[bool, str]:
-        """Fallback: save via the ``/sql`` endpoint with SQL-escaped strings.
-
-        The ``/sql`` endpoint embeds values inside SQL string literals, which
-        avoids the record-link misinterpretation bug in ``/rpc``.  The trade-off
-        is a 1 MiB body limit and SQL-escaping overhead.
-        """
-        tables_json_str = json.dumps(tables, ensure_ascii=False)
-        escaped_text = escape_sql(text)
-        escaped_hash = escape_sql(doc_hash)
-        escaped_reason = escape_sql(reason_val)
-
-        sql = (
-            f"UPDATE exchange_filing:{fid} SET "
-            f"documentSize = {size_bytes}, "
-            f"documentType = '{escape_sql(doc_type)}', "
-            f"documentHash = '{escaped_hash}', "
-            f"documentText = '{escaped_text}', "
-            f"documentTextLen = {len(text)}, "
-            f"documentTables = {tables_json_str}, "
-            f"documentTableCnt = {len(tables)}, "
-            f"documentStatus = '{escape_sql(status_val)}', "
-            f"documentStatusReason = '{escaped_reason}', "
-            f"updatedAt = time::now() "
-            f"RETURN NONE;"
-        )
-
-        sql_bytes = len(sql.encode("utf-8"))
-        if sql_bytes > MAX_SQL_BODY_SIZE:
-            # Truncate text to fit within /sql 1 MiB limit
-            overhead = sql_bytes - len(escaped_text.encode("utf-8"))
-            budget = MAX_SQL_BODY_SIZE - overhead - 4096  # safety margin
-            trunc_text = text[: max(budget, 50_000)]
-            last_nl = trunc_text.rfind("\n")
-            if last_nl > len(trunc_text) // 2:
-                trunc_text = trunc_text[:last_nl]
-            escaped_trunc = escape_sql(trunc_text)
-            sql = (
-                f"UPDATE exchange_filing:{fid} SET "
-                f"documentSize = {size_bytes}, "
-                f"documentType = '{escape_sql(doc_type)}', "
-                f"documentHash = '{escaped_hash}', "
-                f"documentText = '{escaped_trunc}', "
-                f"documentTextLen = {len(trunc_text)}, "
-                f"documentTables = [], "
-                f"documentTableCnt = 0, "
-                f"documentStatus = 'processed', "
-                f"documentStatusReason = 'sql_fallback_truncated_from_{len(text)}', "
-                f"updatedAt = time::now() "
-                f"RETURN NONE;"
-            )
-            log(
-                f"  /sql fallback truncated text for {fid}: "
-                f"{len(text)} -> {len(trunc_text)} chars, no tables"
-            )
-
-        sql_result = surreal_query(sql, timeout=120)
-        if isinstance(sql_result, list):
-            for r in sql_result:
-                if isinstance(r, dict) and r.get("status") == "ERR":
-                    log(f"  /sql fallback failed for {fid}: {str(r.get('result', ''))[:200]}")
-                    return False, f"sql_fallback_error:{str(r.get('result', ''))[:100]}"
-            return True, ""
-        log(f"  /sql fallback failed for {fid}: {str(sql_result)[:200]}")
-        return False, "sql_fallback_error"
-
-    def _finalize(surreal_ok: bool, error_code: str = "") -> Tuple[bool, str]:
-        """Dispatch the computed payload to every configured sink and combine results."""
-        if config.surrealdb_enabled():
-            record_sink("surrealdb", surreal_ok)
-        ok = surreal_ok
-        if config.postgres_enabled():
-            if not db_postgres.postgres_available():
-                warn_pg_unavailable_once()
-            else:
-                payload = {
-                    "document_size": size_bytes,
-                    "document_type": doc_type,
-                    "document_hash": doc_hash,
-                    "document_text": text_to_save,
-                    "document_text_len": len(text_to_save),
-                    "document_tables": tables_list,
-                    "document_table_cnt": tables_count,
-                    "document_status": status,
-                    "document_status_reason": reason,
-                }
-                pg_ok, pg_code = db_postgres.upsert_document(fid, payload)
-                if pg_code:
-                    record_sink("postgres", False)
-                    log(f"  PostgreSQL document save failed for {fid}: {pg_code[:200]}")
-                else:
-                    record_sink("postgres", True)
-                if config.postgres_required():
-                    ok = ok and pg_ok
-        return ok, error_code
-
-    if not config.surrealdb_enabled():
-        # PostgreSQL-only mode: skip the SurrealDB attempt entirely.
-        return _finalize(True)
-
-    # --- First attempt via /rpc ---
-    result = surreal_rpc("query", [sql_template, vars_dict], timeout=120)
-    if not (isinstance(result, dict) and result.get("error")):
-        return _finalize(True)  # success
-
-    err = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
-
-    # --- Record-link fallback: retry via /sql (avoids the colon-parsing bug) ---
-    if _is_record_link_error(result):
-        log(f"  RPC record-link error for {fid} ({str(err)[:80]}): retrying via /sql endpoint")
-        return _finalize(*_save_via_sql(text_to_save, tables_list, status, reason))
-
-    # --- Body-too-large fallback: truncate aggressively and retry via /rpc ---
-    if _is_body_too_large(result):
-        fallback_text_limit = 2_000_000  # ~2M chars should fit easily in 4 MiB
-        truncated_text = extracted_text[:fallback_text_limit]
-        last_nl = truncated_text.rfind("\n")
-        if last_nl > fallback_text_limit // 2:
-            truncated_text = truncated_text[:last_nl]
-        log(
-            f"  RPC payload too large for {fid} ({str(err)[:80]}): "
-            f"retrying with {len(truncated_text)} chars, no tables"
-        )
-
-        vars_dict["doc_text"] = truncated_text
-        vars_dict["doc_text_len"] = len(truncated_text)
-        vars_dict["doc_tables"] = []
-        vars_dict["doc_table_cnt"] = 0
-        vars_dict["doc_status"] = "processed"
-        vars_dict["doc_reason"] = f"truncated_from_{original_text_len}"
-
-        result_retry = surreal_rpc("query", [sql_template, vars_dict], timeout=120)
-        if not (isinstance(result_retry, dict) and result_retry.get("error")):
-            return _finalize(True)  # success with truncation
-
-        retry_err = (
-            result_retry.get("error", "unknown") if isinstance(result_retry, dict) else "unknown"
-        )
-        log(f"  Doc save failed for {fid} even after RPC truncation: {str(retry_err)[:200]}")
-        return _finalize(False, "rpc_body_too_large_truncation_failed")
-
-    # --- Non-size error ---
-    log(f"  Doc save failed for {fid}: {str(err)[:200]}")
-    error_code = f"save_error:{str(err)[:100]}"
-    return _finalize(False, error_code)
+    ok = True
+    first_error = ""
+    for sink in _configured_sinks():
+        if not sink.available():
+            warn_sink_unavailable_once(sink)
+            continue
+        try:
+            sink_ok, err_code = sink.upsert_document(fid, payload)
+        except Exception as exc:  # noqa: BLE001
+            record_sink(sink.id, False)
+            log(f"  {sink.id} document save raised for {fid}: {type(exc).__name__}: {exc}")
+            ok = False
+            first_error = first_error or f"{sink.id}_exception"
+            continue
+        if err_code:
+            record_sink(sink.id, False)
+            log(f"  {sink.id} document save failed for {fid}: {err_code[:200]}")
+            first_error = first_error or err_code
+        else:
+            record_sink(sink.id, True)
+        ok = ok and sink_ok
+    return ok, first_error
 
 
 def _mark_filing_status(fid: str, status: str, reason: str = "") -> bool:
     """Mark a filing with a ``documentStatus`` (e.g. ``skipped``, ``failed``)."""
     ok = True
-    if config.surrealdb_enabled():
-        safe_reason = escape_sql(reason[:200]) if reason else ""
-        sql = (
-            "UPDATE exchange_filing:{fid} SET\n"
-            "  documentStatus = '{status}',\n"
-            "  documentStatusReason = '{reason}',\n"
-            "  updatedAt = time::now()\n"
-            "RETURN NONE;\n"
-        ).format(fid=fid, status=escape_sql(status), reason=safe_reason)
-        result = surreal_query(sql, timeout=30)
-        surreal_ok = not (isinstance(result, dict) and result.get("error"))
-        record_sink("surrealdb", surreal_ok)
-        ok = ok and surreal_ok
-
-    if config.postgres_enabled():
-        if not db_postgres.postgres_available():
-            warn_pg_unavailable_once()
+    for sink in _configured_sinks():
+        if not sink.available():
+            warn_sink_unavailable_once(sink)
+            continue
+        try:
+            sink_ok, err_code = sink.mark_status(fid, status, reason[:200])
+        except Exception as exc:  # noqa: BLE001
+            record_sink(sink.id, False)
+            log(f"  {sink.id} status update raised for {fid}: {type(exc).__name__}: {exc}")
+            ok = False
+            continue
+        if err_code:
+            record_sink(sink.id, False)
+            log(f"  {sink.id} status update failed for {fid}: {err_code[:200]}")
         else:
-            pg_ok, pg_code = db_postgres.mark_document_status(fid, status, reason[:200])
-            if pg_code:
-                record_sink("postgres", False)
-                log(f"  PostgreSQL status update failed for {fid}: {pg_code[:200]}")
-            else:
-                record_sink("postgres", True)
-            if config.postgres_required():
-                ok = ok and pg_ok
+            record_sink(sink.id, True)
+        ok = ok and sink_ok
     return ok
 
 
@@ -714,9 +406,7 @@ def run_phase1(
 
         chunk_new = 0
         for f in chunk_filings:
-            fid = hashlib.md5(
-                f"{f['stockCode']}{f['date']}{f.get('title', '')}".encode()
-            ).hexdigest()[:16]
+            fid = filing_id_for(f)
             if fid not in saved_ids:
                 saved_ids.add(fid)
                 all_filings.append(f)
@@ -732,44 +422,17 @@ def run_phase1(
                 f"  Coverage: {chunk_new}/{api_total} = {pct:.1f}% "
                 f"({len(chunk_filings)} raw records)"
             )
-            if config.surrealdb_enabled():
-                try:
-                    surreal_query(
-                        f"INSERT INTO scrape_coverage {{"
-                        f"  chunkFrom: d'{chunk_from.strftime('%Y-%m-%d')}', "
-                        f"  chunkTo: d'{chunk_to.strftime('%Y-%m-%d')}', "
-                        f"  apiCount: {api_total}, "
-                        f"  ingestedCount: {len(chunk_filings)}, "
-                        f"  uniqueCount: {chunk_new}, "
-                        f"  runId: '{run_id}', "
-                        f"  timestamp: time::now()"
-                        f"}};",
-                        timeout=30,
-                    )
-                    record_sink("surrealdb", True)
-                except Exception as e:
-                    record_sink("surrealdb", False)
-                    log(f"  WARNING: Failed to persist coverage: {e}")
-            if config.postgres_enabled():
-                if not db_postgres.postgres_available():
-                    warn_pg_unavailable_once()
-                else:
-                    pg_ok, pg_code = db_postgres.insert_coverage(
-                        {
-                            "chunk_from": chunk_from,
-                            "chunk_to": chunk_to,
-                            "api_count": api_total,
-                            "ingested_count": len(chunk_filings),
-                            "unique_count": chunk_new,
-                            "run_id": run_id,
-                            "timestamp": datetime.now(timezone.utc),
-                        }
-                    )
-                    if pg_code:
-                        record_sink("postgres", False)
-                        log(f"  WARNING: Failed to persist coverage to PostgreSQL: {pg_code[:200]}")
-                    else:
-                        record_sink("postgres", True)
+            _persist_coverage(
+                {
+                    "chunk_from": chunk_from,
+                    "chunk_to": chunk_to,
+                    "api_count": api_total,
+                    "ingested_count": len(chunk_filings),
+                    "unique_count": chunk_new,
+                    "run_id": run_id,
+                    "timestamp": datetime.now(timezone.utc),
+                }
+            )
         elif api_total is not None and api_total == 0:
             log("  Coverage: 0 filings (empty range)")
         else:
@@ -817,6 +480,25 @@ def run_phase1(
     return total_saved, ingested_tickers
 
 
+def _persist_coverage(chunk: Dict[str, Any]) -> None:
+    """Write one coverage row to every configured sink."""
+    for sink in _configured_sinks():
+        if not sink.available():
+            warn_sink_unavailable_once(sink)
+            continue
+        try:
+            ok, err_code = sink.insert_coverage(chunk)
+        except Exception as exc:  # noqa: BLE001
+            record_sink(sink.id, False)
+            log(f"  WARNING: coverage persist raised on {sink.id}: {type(exc).__name__}: {exc}")
+            continue
+        if err_code:
+            record_sink(sink.id, False)
+            log(f"  WARNING: Failed to persist coverage to {sink.id}: {err_code[:200]}")
+        else:
+            record_sink(sink.id, True)
+
+
 # ---------------------------------------------------------------------------
 # Phase 2: Document backfill
 # ---------------------------------------------------------------------------
@@ -844,24 +526,15 @@ def run_phase2(
     log(f"Workers: {max_workers}, Batch size: {batch_size}, Limit: {limit or 'unlimited'}")
     log("")
 
-    if config.surrealdb_enabled():
-        count_result = surreal_query(
-            "SELECT count() AS cnt FROM exchange_filing "
-            "WHERE documentStatus IS NONE "
-            "AND documentUrl IS NOT NONE "
-            "GROUP ALL;",
-            timeout=120,
-        )
+    reader = sinks.read_sink()
+    if reader is None:
+        log("ERROR: no configured sink supports reads; cannot select pending filings.")
+        return stats
+
+    total_missing, count_code = reader.count_pending_filings()
+    if count_code:
+        log(f"  ERROR: Could not count pending filings via {reader.id}: {count_code[:200]}")
         total_missing = 0
-        if isinstance(count_result, list) and len(count_result) > 0:
-            r = count_result[0].get("result", [])
-            if r and isinstance(r, list) and len(r) > 0:
-                total_missing = r[0].get("cnt", 0)
-    else:
-        total_missing, count_code = db_postgres.count_pending_filings()
-        if count_code:
-            log(f"  ERROR: Could not count pending filings in PostgreSQL: {count_code[:200]}")
-            total_missing = 0
     stats["total_missing"] = total_missing
     log(f"Filings needing processing: {total_missing}")
 
@@ -879,38 +552,20 @@ def run_phase2(
         remaining = effective_limit - stats["total_processed"]
         this_batch = min(batch_size, remaining)
 
-        if config.surrealdb_enabled():
-            fetch_sql = (
-                f"SELECT id, filingId, documentUrl, filingDate FROM exchange_filing "
-                f"WHERE documentStatus IS NONE "
-                f"AND documentUrl IS NOT NONE "
-                f"ORDER BY filingDate DESC "
-                f"LIMIT {this_batch};"
-            )
-            result = surreal_query(fetch_sql, timeout=120)
-            filings: list = []
-            if isinstance(result, list) and len(result) > 0:
-                filings = result[0].get("result", [])
-        else:
-            rows, fetch_code = db_postgres.fetch_pending_filings(this_batch)
-            if fetch_code:
-                log(f"  ERROR: Could not fetch pending filings from PostgreSQL: {fetch_code[:200]}")
-                break
-            filings = [
-                {"filingId": r.get("filing_id", ""), "documentUrl": r.get("document_url", "")}
-                for r in rows
-            ]
-        if not filings:
+        rows, fetch_code = reader.fetch_pending_filings(this_batch)
+        if fetch_code:
+            log(f"  ERROR: Could not fetch pending filings via {reader.id}: {fetch_code[:200]}")
+            break
+        if not rows:
             log(f"No more filings to process (batch {batch_num}).")
             break
 
-        log(f"Batch {batch_num}: Processing {len(filings)} filings...")
+        log(f"Batch {batch_num}: Processing {len(rows)} filings...")
 
         download_tasks: list = []
-        for f in filings:
-            record_id = str(f.get("id", ""))
-            fid = record_id.split(":")[-1] if ":" in record_id else f.get("filingId", "")
-            doc_url = f.get("documentUrl", "")
+        for row in rows:
+            fid = row.get("filing_id", "")
+            doc_url = row.get("document_url", "")
             if fid and doc_url:
                 download_tasks.append((fid, doc_url))
             elif fid:
@@ -918,7 +573,7 @@ def run_phase2(
                 stats["skipped"] += 1
 
         if not download_tasks:
-            stats["total_processed"] += len(filings)
+            stats["total_processed"] += len(rows)
             continue
 
         # Download in parallel
@@ -974,7 +629,7 @@ def run_phase2(
         stats["docs_downloaded"] += batch_downloaded
         stats["texts_extracted"] += batch_texts
         stats["tables_total"] += batch_tables
-        stats["total_processed"] += len(filings)
+        stats["total_processed"] += len(rows)
 
         log(
             f"  Batch {batch_num}: {batch_downloaded} docs saved, "
@@ -1009,3 +664,17 @@ def run_phase2(
     log(f"Skipped:          {stats['skipped']}")
     log(f"Errors:           {stats['errors']}")
     return stats
+
+
+__all__ = [
+    "SINK_STATS",
+    "reset_sink_stats",
+    "record_sink",
+    "sink_exit_code",
+    "log_sink_summary",
+    "warn_sink_unavailable_once",
+    "filing_id_for",
+    "run_phase1",
+    "run_phase2",
+    "SUPPORTED_EXTENSIONS",
+]

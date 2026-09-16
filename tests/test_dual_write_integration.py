@@ -11,12 +11,12 @@ import uuid
 
 import pytest
 
-from hkex_scraper import config, db, db_postgres, pipeline
+from hkex_scraper import config, db, db_postgres, pipeline, sinks
 
 pytestmark = pytest.mark.skipif(
     not (
-        config.surrealdb_enabled()
-        and config.postgres_enabled()
+        "surrealdb" in config.sink_ids()
+        and "postgres" in config.sink_ids()
         and config.SURREAL_ENDPOINT
         and config.SURREAL_PASS
         and db_postgres.postgres_available()
@@ -27,11 +27,12 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module", autouse=True)
 def _schema():
-    assert db.initialize_schema() is True
-    ok, code = db_postgres.initialize_postgres_schema()
-    assert ok, code
+    # A real run initialises every configured sink (main._init_schemas).
+    for sink in sinks.enabled_sinks():
+        ok, code = sink.ensure_schema()
+        assert ok, f"{sink.id} schema init failed: {code}"
     yield
-    db_postgres.close_pool()
+    sinks.close_all()
 
 
 def _surreal_count(where: str) -> int:

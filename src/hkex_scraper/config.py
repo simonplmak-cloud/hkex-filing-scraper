@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from urllib.parse import quote
+from typing import Dict, List
+from urllib.parse import quote, unquote, urlparse
 
 # ---------------------------------------------------------------------------
 # Optional dotenv support (graceful if missing)
@@ -23,7 +24,7 @@ if _env_path.exists():
     load_dotenv(_env_path)
 
 # ---------------------------------------------------------------------------
-# SurrealDB connection
+# SurrealDB connection (optional sink)
 # ---------------------------------------------------------------------------
 SURREAL_ENDPOINT: str = os.environ.get("SURREAL_ENDPOINT", "")
 SURREAL_NS: str = os.environ.get("SURREAL_NAMESPACE", "default")
@@ -34,29 +35,41 @@ SURREAL_PASS: str = os.environ.get("SURREAL_PASSWORD", "")
 # ---------------------------------------------------------------------------
 # Database sink selection
 # ---------------------------------------------------------------------------
-# DATABASE_TARGET selects which persistence sink(s) receive scraped records:
-#   "surrealdb" (default) -> SurrealDB only (backward compatible)
-#   "postgres" / "postgresql" / "pg" -> PostgreSQL only
-#   "both" / "dual" -> SurrealDB and PostgreSQL
-_SINK_ALIASES_BOTH = {"both", "dual", "surrealdb,postgres", "postgres,surrealdb"}
-_SINK_ALIASES_POSTGRES = {"postgres", "postgresql", "pg"}
+# DATABASE_TARGET is an explicit, comma-separated list of sink ids, in order.
+# Read routing uses the first configured sink that supports reads. There is no
+# silent default: an unset or empty value is a configuration error surfaced by
+# the CLI (see main._validate_env).
+DATABASE_TARGET: str = os.environ.get("DATABASE_TARGET", "")
 
 
-def _resolve_sinks(target: str) -> tuple[bool, bool]:
-    """Map a ``DATABASE_TARGET`` value to ``(surrealdb_enabled, postgres_enabled)``."""
-    value = (target or "").strip().lower()
-    if value in _SINK_ALIASES_BOTH:
-        return True, True
-    if value in _SINK_ALIASES_POSTGRES:
-        return False, True
-    # Default / "surrealdb" / any unrecognised value keeps the original behaviour.
-    return True, False
+def parse_target(target: str) -> List[str]:
+    """Parse a ``DATABASE_TARGET`` value into an ordered, de-duplicated id list."""
+    seen: List[str] = []
+    for raw in (target or "").split(","):
+        sink_id = raw.strip().lower()
+        if sink_id and sink_id not in seen:
+            seen.append(sink_id)
+    return seen
 
 
-DATABASE_TARGET: str = os.environ.get("DATABASE_TARGET", "surrealdb")
-SURREALDB_ENABLED: bool
-POSTGRES_ENABLED: bool
-SURREALDB_ENABLED, POSTGRES_ENABLED = _resolve_sinks(DATABASE_TARGET)
+def sink_ids() -> List[str]:
+    """Return the configured sink ids in order."""
+    return parse_target(DATABASE_TARGET)
+
+
+def apply_database_target(target: str) -> List[str]:
+    """Re-resolve the sink selection at runtime (e.g. from a CLI override).
+
+    Updates the module-level value in place and clears the constructed-sink
+    cache so callers observe the override for the rest of the run.
+    """
+    global DATABASE_TARGET
+    DATABASE_TARGET = target or ""
+    from . import sinks
+
+    sinks.reset()
+    return sink_ids()
+
 
 # ---------------------------------------------------------------------------
 # PostgreSQL connection (optional sink)
@@ -91,32 +104,107 @@ def postgres_conninfo() -> str:
     return ""
 
 
-def apply_database_target(target: str) -> tuple[bool, bool]:
-    """Re-resolve the sink selection at runtime (e.g. from a CLI override).
+# ---------------------------------------------------------------------------
+# MySQL / MariaDB connection (optional sink)
+# ---------------------------------------------------------------------------
+MYSQL_HOST: str = os.environ.get("MYSQL_HOST", "")
+MYSQL_PORT: str = os.environ.get("MYSQL_PORT", "3306")
+MYSQL_DATABASE: str = os.environ.get("MYSQL_DATABASE", "")
+MYSQL_USER: str = os.environ.get("MYSQL_USER", "")
+MYSQL_PASSWORD: str = os.environ.get("MYSQL_PASSWORD", "")
 
-    Updates the module-level flags in place so callers reading
-    ``config.postgres_enabled()`` observe the override for the rest of the run.
+MARIADB_HOST: str = os.environ.get("MARIADB_HOST", "")
+MARIADB_PORT: str = os.environ.get("MARIADB_PORT", "")
+MARIADB_DATABASE: str = os.environ.get("MARIADB_DATABASE", "")
+MARIADB_USER: str = os.environ.get("MARIADB_USER", "")
+MARIADB_PASSWORD: str = os.environ.get("MARIADB_PASSWORD", "")
+
+
+def _parse_driver_dsn(dsn: str) -> Dict[str, object]:
+    """Parse ``mysql://user:pass@host:port/db`` into PyMySQL connection kwargs."""
+    parsed = urlparse(dsn)
+    kwargs: Dict[str, object] = {}
+    if parsed.hostname:
+        kwargs["host"] = parsed.hostname
+    if parsed.port:
+        kwargs["port"] = int(parsed.port)
+    if parsed.username:
+        kwargs["user"] = unquote(parsed.username)
+    if parsed.password:
+        kwargs["password"] = unquote(parsed.password)
+    database = (parsed.path or "").lstrip("/")
+    if database:
+        kwargs["database"] = database
+    return kwargs
+
+
+def mysql_conn_kwargs(prefix: str = "MYSQL") -> Dict[str, object]:
+    """Return PyMySQL connection kwargs for *prefix*, or ``{}`` when unconfigured.
+
+    ``MARIADB`` falls back to the ``MYSQL_*`` variables when its own are absent.
     """
-    global DATABASE_TARGET, SURREALDB_ENABLED, POSTGRES_ENABLED
-    DATABASE_TARGET = target or "surrealdb"
-    SURREALDB_ENABLED, POSTGRES_ENABLED = _resolve_sinks(DATABASE_TARGET)
-    return SURREALDB_ENABLED, POSTGRES_ENABLED
+    dsn = os.environ.get(f"{prefix}_DSN", "")
+    if dsn:
+        return _parse_driver_dsn(dsn)
+
+    def value(name: str) -> str:
+        own = os.environ.get(f"{prefix}_{name}", "")
+        if own:
+            return own
+        if prefix != "MYSQL":
+            return os.environ.get(f"MYSQL_{name}", "")
+        return ""
+
+    host = value("HOST")
+    database = value("DATABASE")
+    user = value("USER")
+    if not (host and database and user):
+        return {}
+    kwargs: Dict[str, object] = {
+        "host": host,
+        "port": int(value("PORT") or "3306"),
+        "database": database,
+        "user": user,
+    }
+    password = value("PASSWORD")
+    if password:
+        kwargs["password"] = password
+    return kwargs
 
 
-def surrealdb_enabled() -> bool:
-    """Whether the SurrealDB sink is active for this run."""
-    return SURREALDB_ENABLED
+# ---------------------------------------------------------------------------
+# SQLite connection (optional sink)
+# ---------------------------------------------------------------------------
+# A filesystem path, or ":memory:" for an ephemeral database.
+SQLITE_PATH: str = os.environ.get("SQLITE_PATH", "")
 
+# ---------------------------------------------------------------------------
+# DuckDB connection (optional sink)
+# ---------------------------------------------------------------------------
+DUCKDB_PATH: str = os.environ.get("DUCKDB_PATH", "")
 
-def postgres_enabled() -> bool:
-    """Whether the PostgreSQL sink is active for this run."""
-    return POSTGRES_ENABLED
+# ---------------------------------------------------------------------------
+# MongoDB connection (optional sink)
+# ---------------------------------------------------------------------------
+MONGODB_URI: str = os.environ.get("MONGODB_URI", "")
+MONGODB_DATABASE: str = os.environ.get("MONGODB_DATABASE", "")
 
+# ---------------------------------------------------------------------------
+# ClickHouse connection (optional sink)
+# ---------------------------------------------------------------------------
+CLICKHOUSE_HOST: str = os.environ.get("CLICKHOUSE_HOST", "")
+CLICKHOUSE_PORT: str = os.environ.get("CLICKHOUSE_PORT", "8123")
+CLICKHOUSE_DATABASE: str = os.environ.get("CLICKHOUSE_DATABASE", "")
+CLICKHOUSE_USER: str = os.environ.get("CLICKHOUSE_USER", "")
+CLICKHOUSE_PASSWORD: str = os.environ.get("CLICKHOUSE_PASSWORD", "")
 
-def postgres_required() -> bool:
-    """True when PostgreSQL is the only enabled sink and therefore cannot degrade."""
-    return POSTGRES_ENABLED and not SURREALDB_ENABLED
-
+# ---------------------------------------------------------------------------
+# Neo4j connection (optional sink)
+# ---------------------------------------------------------------------------
+NEO4J_URI: str = os.environ.get("NEO4J_URI", "")
+NEO4J_USER: str = os.environ.get("NEO4J_USER", "")
+NEO4J_PASSWORD: str = os.environ.get("NEO4J_PASSWORD", "")
+NEO4J_DATABASE: str = os.environ.get("NEO4J_DATABASE", "")
 
 # ---------------------------------------------------------------------------
 # Graph linking (optional)

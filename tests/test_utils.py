@@ -1,11 +1,12 @@
 """Unit tests for hkex_scraper.utils — no database or network required."""
 
-from hkex_scraper.graph import _normalize_company_id, _ticker_to_record_id
 from hkex_scraper.utils import (
     classify_filing,
     escape_sql,
     extract_referenced_tickers,
+    normalize_company_id,
     squash_ws,
+    ticker_to_record_id,
 )
 
 
@@ -87,60 +88,62 @@ class TestExtractReferencedTickers:
 
 class TestCompanyIdNormalization:
     def test_strips_leading_zeros(self):
-        assert _ticker_to_record_id("0001.HK") == "1_HK"
+        assert ticker_to_record_id("0001.HK") == "1_HK"
 
     def test_six_digit_unpadded(self):
-        assert _ticker_to_record_id("000426.HK") == "426_HK"
+        assert ticker_to_record_id("000426.HK") == "426_HK"
 
     def test_no_leading_zeros_unchanged(self):
-        assert _ticker_to_record_id("2378.HK") == "2378_HK"
+        assert ticker_to_record_id("2378.HK") == "2378_HK"
 
     def test_non_hk_exchange(self):
-        assert _ticker_to_record_id("AAPL.US") == "AAPL_US"
+        assert ticker_to_record_id("AAPL.US") == "AAPL_US"
 
     def test_normalize_db_id(self):
-        assert _normalize_company_id("eodhd_company:0001_HK") == "1_HK"
+        assert normalize_company_id("eodhd_company:0001_HK") == "1_HK"
 
     def test_normalize_db_id_six_digit(self):
-        assert _normalize_company_id("eodhd_company:000426_HK") == "426_HK"
+        assert normalize_company_id("eodhd_company:000426_HK") == "426_HK"
 
     def test_normalize_db_id_no_zeros(self):
-        assert _normalize_company_id("eodhd_company:2378_HK") == "2378_HK"
+        assert normalize_company_id("eodhd_company:2378_HK") == "2378_HK"
 
     def test_ticker_and_db_id_match(self):
-        assert _ticker_to_record_id("0001.HK") == _normalize_company_id("eodhd_company:0001_HK")
-        assert _ticker_to_record_id("000426.HK") == _normalize_company_id("eodhd_company:000426_HK")
-        assert _ticker_to_record_id("2378.HK") == _normalize_company_id("eodhd_company:2378_HK")
+        assert ticker_to_record_id("0001.HK") == normalize_company_id("eodhd_company:0001_HK")
+        assert ticker_to_record_id("000426.HK") == normalize_company_id("eodhd_company:000426_HK")
+        assert ticker_to_record_id("2378.HK") == normalize_company_id("eodhd_company:2378_HK")
 
 
 class TestLoadCompanyIds:
     def test_missing_table_returns_empty(self, monkeypatch):
-        from hkex_scraper import graph
+        from hkex_scraper.sinks import surrealdb as surreal_module
 
-        monkeypatch.setattr(graph, "COMPANY_TABLE", "company", raising=False)
+        monkeypatch.setattr(surreal_module, "COMPANY_TABLE", "company")
         monkeypatch.setattr(
-            graph,
+            surreal_module.db,
             "surreal_query",
             lambda sql, timeout=60: [
                 {"status": "ERR", "result": "The table 'company' does not exist"}
             ],
         )
-        assert graph._load_company_ids() == {}
+        assert surreal_module.SurrealDBSink()._load_company_ids() == {}
 
     def test_error_dict_returns_empty(self, monkeypatch):
-        from hkex_scraper import graph
+        from hkex_scraper.sinks import surrealdb as surreal_module
 
-        monkeypatch.setattr(graph, "COMPANY_TABLE", "company", raising=False)
-        monkeypatch.setattr(graph, "surreal_query", lambda sql, timeout=60: {"error": "boom"})
-        assert graph._load_company_ids() == {}
+        monkeypatch.setattr(surreal_module, "COMPANY_TABLE", "company")
+        monkeypatch.setattr(
+            surreal_module.db, "surreal_query", lambda sql, timeout=60: {"error": "boom"}
+        )
+        assert surreal_module.SurrealDBSink()._load_company_ids() == {}
 
     def test_parses_record_ids(self, monkeypatch):
-        from hkex_scraper import graph
+        from hkex_scraper.sinks import surrealdb as surreal_module
 
-        monkeypatch.setattr(graph, "COMPANY_TABLE", "company", raising=False)
+        monkeypatch.setattr(surreal_module, "COMPANY_TABLE", "company")
         monkeypatch.setattr(
-            graph,
+            surreal_module.db,
             "surreal_query",
             lambda sql, timeout=60: [{"status": "OK", "result": [{"id": "company:0001_HK"}]}],
         )
-        assert graph._load_company_ids() == {"1_HK": "company:0001_HK"}
+        assert surreal_module.SurrealDBSink()._load_company_ids() == {"1_HK": "company:0001_HK"}

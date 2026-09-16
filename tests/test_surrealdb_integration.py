@@ -11,19 +11,22 @@ import hashlib
 import uuid
 
 import pytest
-
-from hkex_scraper import config, db, pipeline
+from hkex_scraper import config, db, pipeline, sinks
 
 pytestmark = pytest.mark.skipif(
-    not config.surrealdb_enabled() or not config.SURREAL_ENDPOINT or not config.SURREAL_PASS,
+    "surrealdb" not in config.sink_ids() or not config.SURREAL_ENDPOINT or not config.SURREAL_PASS,
     reason="SurrealDB not configured",
 )
 
 
 @pytest.fixture(scope="module", autouse=True)
 def _schema():
-    assert db.initialize_schema() is True, "SurrealDB schema init failed"
+    # A real run initialises every configured sink (main._init_schemas).
+    for sink in sinks.enabled_sinks():
+        ok, code = sink.ensure_schema()
+        assert ok, f"{sink.id} schema init failed: {code}"
     yield
+    sinks.close_all()
 
 
 def _title() -> str:
@@ -113,9 +116,9 @@ def test_graph_edge_is_created_when_company_table_configured():
     assert pipeline._save_filings_batch_metadata([filing]) == 1
 
     # Seed a matching company record using the configured id pattern.
-    from hkex_scraper.graph import _ticker_to_record_id
+    from hkex_scraper.utils import ticker_to_record_id
 
-    company_id = _ticker_to_record_id("0451.HK")
+    company_id = ticker_to_record_id("0451.HK")
     db.surreal_query(f"CREATE {config.COMPANY_TABLE}:{company_id};", timeout=30)
 
     from hkex_scraper.graph import link_filings_to_companies

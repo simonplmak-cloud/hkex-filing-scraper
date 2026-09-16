@@ -22,22 +22,35 @@ flowchart LR
 
 ## Sink seam
 
-Persistence is centralised so a second destination can be added without touching scrape/extract logic:
+Persistence is centralised behind one contract so a new destination is a localised change:
 
-- `config.py` resolves `DATABASE_TARGET` into `surrealdb_enabled()` / `postgres_enabled()` / `postgres_required()`.
-- `db.py` writes to SurrealDB (`/rpc` first, `/sql` fallback).
-- `db_postgres.py` writes to PostgreSQL (optional `psycopg` import, idempotent DDL, parameterised `ON CONFLICT` upserts).
-- `pipeline.py` dispatches each value object to every configured sink and counts per-sink successes/failures (`record_sink`, `sink_exit_code`).
-- `main.py` fails fast when a required sink is unusable and exits non-zero when a required sink recorded failures.
+- `sinks/base.py` defines `Sink` (write/read methods returning `(value, error_code)`) and
+  `SinkCapabilities` (upsert, reads, edges, JSON, arrays, limits).
+- `sinks/registry.py` maps each id (`postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb`) to
+  its licence, optional extra, and a **lazily imported** factory.
+- `sinks/relational.py` + `sinks/dialects.py` implement every SQL dialect through one shared
+  loop; `sinks/postgres.py` adapts the existing `db_postgres.py`; `sinks/surrealdb.py` owns
+  SurrealQL, `RELATE`, the RPC→`/sql` fallback, and company-id resolution.
+- `config.py` parses `DATABASE_TARGET` into an ordered list (`sink_ids()`); reads are served
+  by the first configured sink whose capabilities include `reads`.
+- `pipeline.py` builds one canonical value object per filing/document/coverage/edge and
+  dispatches it to every configured sink, counting per-sink successes/failures
+  (`record_sink`, `sink_exit_code`).
+- `main.py` fails fast when any configured sink is unusable and exits non-zero when any
+  configured sink recorded failures.
 
 ```mermaid
 flowchart TD
-    V[Value object<br/>filing / document / coverage / edge] --> D{DATABASE_TARGET}
-    D -->|surrealdb / both| S[(SurrealDB)]
-    D -->|postgres / both| P[(PostgreSQL)]
-    S --> R[record_sink]
+    V[Value object<br/>filing / document / coverage / edge] --> D[DATABASE_TARGET<br/>ordered sink list]
+    D --> S[(SurrealDB)]
+    D --> P[(PostgreSQL)]
+    D --> M[(MySQL / MariaDB)]
+    D --> L[(SQLite)]
+    S --> R[record_sink per sink]
     P --> R
-    R --> X{required sink failed?}
+    M --> R
+    L --> R
+    R --> X{any configured sink failed?}
     X -->|yes| E[exit 1]
     X -->|no| O[exit 0]
 ```
