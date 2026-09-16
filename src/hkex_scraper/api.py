@@ -28,6 +28,17 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 
+def _as_text(value) -> str:
+    """Coerce an API field to text.
+
+    HKEx has emitted ``null`` and bare numbers for fields documented as strings, so never
+    assume a string — a single bad field must not lose the whole record.
+    """
+    if value is None:
+        return ""
+    return value if isinstance(value, str) else str(value)
+
+
 def _parse_api_record(record: dict) -> dict:
     """Convert a raw HKEx API JSON record into our internal filing format.
 
@@ -46,20 +57,17 @@ def _parse_api_record(record: dict) -> dict:
             "TOTAL_COUNT": "14957"
         }
     """
-    date_time = record.get("DATE_TIME", "")
+    date_time = _as_text(record.get("DATE_TIME"))
     date_part = date_time.split(" ")[0] if date_time else ""
 
-    raw_code = record.get("STOCK_CODE", "")
-    raw_code = raw_code.split("<br/>")[0].strip()
+    raw_code = _as_text(record.get("STOCK_CODE")).split("<br/>")[0].strip()
+    raw_name = _as_text(record.get("STOCK_NAME")).split("<br/>")[0].strip()
 
-    raw_name = record.get("STOCK_NAME", "")
-    raw_name = raw_name.split("<br/>")[0].strip()
-
-    file_link = record.get("FILE_LINK", "")
+    file_link = _as_text(record.get("FILE_LINK"))
     if file_link and file_link.startswith("/"):
         file_link = HKEX_BASE_URL + file_link
 
-    title = record.get("TITLE", "")
+    title = _as_text(record.get("TITLE"))
     title = title.replace("&#x3b;", ";").replace("&amp;", "&")
 
     return {
@@ -204,7 +212,14 @@ def fetch_chunk_via_api(
         fa_match = re.search(r'<form[^>]*action="([^"]+)"', page_resp.text)
         form_action = fa_match.group(1) if fa_match else ""
 
-    submit_url = f"{HKEX_BASE_URL}{form_action}" if form_action.startswith("/") else form_action
+    # The form action is normally a path. If the page layout changes and it disappears,
+    # post back to the search page itself rather than failing with an invalid URL.
+    if form_action.startswith("/"):
+        submit_url = f"{HKEX_BASE_URL}{form_action}"
+    elif form_action:
+        submit_url = form_action
+    else:
+        submit_url = HKEX_SEARCH_PAGE
     session.post(
         submit_url,
         data={
@@ -267,7 +282,11 @@ def fetch_chunk_via_api(
 
         records = json.loads(raw_result)
         if api_total is None and records:
-            api_total = int(records[0].get("TOTAL_COUNT", "0"))
+            api_total = int(_as_text(records[0].get("TOTAL_COUNT", "0")) or "0")
+        if max_records > 0:
+            remaining = max_records - len(all_records)
+            if remaining > 0:
+                records = records[:remaining]
 
         new_records = records[fetched:]
         for rec in new_records:

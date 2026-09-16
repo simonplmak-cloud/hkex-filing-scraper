@@ -6,8 +6,8 @@ Living document. Reviewed at every release. Scores are **L×I** (likelihood × i
 
 | ID | Risk | L | I | Score | Control (current / planned) | Status |
 |----|------|---|---|-------|-----------------------------|--------|
-| R1 | Undocumented HKEx API breaks (JSF/ViewState, `rowRange`, silent format change) | 4 | 5 | **20** | tolerant parsing, per-chunk coverage, retries · **planned:** recorded fixtures + daily canary | C2 |
-| R2 | Cross-sink data loss / corruption (truncation, partial writes, ClickHouse merge) | 2 | 5 | 10 | idempotent upserts, no-clobber, per-sink counters · **planned:** `--verify` + fault injection | C2 |
+| R1 | Undocumented HKEx API breaks (JSF/ViewState, `rowRange`, silent format change) | 4 | 5 | **20** | tolerant parsing, per-chunk coverage, real HTTP retries · **added:** replayed-shape contract tests (`tests/test_api_contract.py`) and a daily live canary (`scripts/canary.py`, `canary.yml`) that opens an issue on a shape change | C1 |
+| R2 | Cross-sink data loss / corruption (truncation, partial writes, ClickHouse merge) | 2 | 5 | 10 | idempotent upserts, no-clobber, per-sink counters · **added:** fault-injection tests (`tests/test_fault_injection.py`) proving failure isolation and non-zero exit; **planned:** `--verify` | C2 |
 | R3 | Solo bus factor / governance | 4 | 4 | 16 | docs, CONTRIBUTING, templates · **added:** CODEOWNERS, Discussions, roadmap, good-first-issue | C1 |
 | R4 | Docs ↔ code drift (already observed) | 4 | 3 | 12 | manual review · **added:**`tests/test_docs_consistency.py` | C1 |
 | R5 | CI not enforced on `main` | 3 | 4 | 12 | CI on PRs · **added:** branch protection (required checks + conversation resolution) | C1 |

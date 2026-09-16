@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **API contract fixtures and a daily canary.** `tests/test_api_contract.py` replays the HKEx
+  response shapes through the real fetch path (ViewState, form POST, pagination, parsing), and
+  `scripts/canary.py` + `.github/workflows/canary.yml` check the live API once a day, opening an
+  issue when the shape changes (target: detect a break within 24 hours).
+- **Fault-injection tests** (`tests/test_fault_injection.py`) prove per-sink failure isolation:
+  a failing or raising sink is counted, never blocks another sink, and makes the run non-zero.
+- Tolerant parsing hardened: the API has emitted `null` and bare numbers for string fields, a
+  missing JSF form action no longer produces an invalid URL, and a page returning more rows than
+  requested can no longer exceed `--limit`.
+
 - **Quality gates.** A coverage gate (`fail_under`, branch coverage, ratcheting upward only),
   property-based tests with Hypothesis over the pure logic, pre-commit hooks (ruff plus
   hygiene checks) enforced in CI, and a job that installs the built wheel into a clean
