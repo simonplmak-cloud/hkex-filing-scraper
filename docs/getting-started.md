@@ -2,21 +2,32 @@
 
 ## Requirements
 
-- Python 3.10+
-- At least one supported database to write into:
-  - a relational server — PostgreSQL 13+, MySQL 8, or MariaDB 10.5+
-  - a filesystem database — SQLite or DuckDB (no server required)
-  - a document/graph/columnar server — MongoDB 6+, ClickHouse 24+, Neo4j 5, or SurrealDB
-- A `.env` file placed in the **current working directory** (the scraper loads `Path.cwd()/.env`, not the repo root).
+- Python 3.10+.
+- At least one supported sink. All nine are first-class destinations:
 
-See [Database backends](backends/README.md) for the support matrix, licences, and capability differences.
+  | Sink | Needs |
+  | ---- | ----- |
+  | `postgres` | a PostgreSQL 13+ server |
+  | `mysql` / `mariadb` | a MySQL 8+ or MariaDB 10.5+ server |
+  | `sqlite` | nothing (stdlib) — a file or `:memory:` |
+  | `mongodb` | a MongoDB 6+ server |
+  | `neo4j` | a Neo4j 5 server |
+  | `clickhouse` | a ClickHouse 24+ server |
+  | `duckdb` | nothing (in-process) — a file or `:memory:` |
+  | `surrealdb` | a SurrealDB server |
+
+- A `.env` file in the **current working directory** (the scraper loads `Path.cwd()/.env`,
+  not the repo root).
+
+See [Database sinks](sinks/README.md) for the support matrix, licenses, and capability
+differences.
 
 ## Install
 
 ```bash
 git clone https://github.com/simonplmak-cloud/hkex-filing-scraper.git
 cd hkex-filing-scraper
-pip install ".[all]"      # PDF/Excel extraction + dotenv + every database driver
+pip install ".[all]"      # Excel extraction + dotenv + every database driver
 ```
 
 Minimal installs:
@@ -27,37 +38,53 @@ pip install ".[postgres]"  # add one driver at a time
 pip install ".[duckdb]"    # or: mysql, mongodb, clickhouse, neo4j
 ```
 
+> The `pdf` extra installs **AGPL-3.0** libraries (PyMuPDF, pymupdf4llm). It is **not** part
+> of `.[all]`. See [Legal & Terms of Use](legal.md#third-party-licenses) before installing it.
+
 ## Configure
 
 ```bash
 cp .env.example .env
 ```
 
-### PostgreSQL (recommended)
+Set `DATABASE_TARGET` to an ordered, comma-separated list of sink ids, then add that sink's
+connection settings. Order matters: reads come from the first read-capable sink in the list.
 
 ```ini
+# PostgreSQL
 DATABASE_TARGET=postgres
 POSTGRES_DSN=postgresql://user:password@localhost:5432/hkex
-```
+# or: POSTGRES_HOST / POSTGRES_PORT / POSTGRES_DATABASE / POSTGRES_USER / POSTGRES_PASSWORD
 
-Or use the discrete `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_DATABASE` / `POSTGRES_USER` / `POSTGRES_PASSWORD` variables instead of `POSTGRES_DSN`.
+# MySQL / MariaDB
+DATABASE_TARGET=mysql            # or mariadb
+MYSQL_HOST=localhost  MYSQL_DATABASE=hkex  MYSQL_USER=hkex  MYSQL_PASSWORD=secret
 
-### SQLite (no server required)
-
-```ini
+# SQLite (no server)
 DATABASE_TARGET=sqlite
 SQLITE_PATH=hkex.db
-```
 
-### SurrealDB
+# MongoDB
+DATABASE_TARGET=mongodb
+MONGODB_URI=mongodb://localhost:27017  MONGODB_DATABASE=hkex
 
-```ini
+# Neo4j
+DATABASE_TARGET=neo4j
+NEO4J_URI=bolt://localhost:7687  NEO4J_USER=neo4j  NEO4J_PASSWORD=secret
+
+# ClickHouse
+DATABASE_TARGET=clickhouse
+CLICKHOUSE_HOST=localhost  CLICKHOUSE_DATABASE=hkex  CLICKHOUSE_USER=default
+
+# DuckDB (no server)
+DATABASE_TARGET=duckdb
+DUCKDB_PATH=hkex.duckdb
+
+# SurrealDB
 DATABASE_TARGET=surrealdb
 SURREAL_ENDPOINT=http://localhost:8000
-SURREAL_NAMESPACE=default
-SURREAL_DATABASE=default
-SURREAL_USERNAME=root
-SURREAL_PASSWORD=your_password
+SURREAL_NAMESPACE=default  SURREAL_DATABASE=default
+SURREAL_USERNAME=root  SURREAL_PASSWORD=your_password
 ```
 
 ### Multiple sinks
@@ -69,32 +96,8 @@ POSTGRES_DSN=postgresql://user:password@localhost:5432/hkex
 SQLITE_PATH=hkex.db
 ```
 
-### Other backends
-
-```ini
-# MySQL / MariaDB
-DATABASE_TARGET=mysql
-MYSQL_HOST=localhost  MYSQL_DATABASE=hkex  MYSQL_USER=hkex  MYSQL_PASSWORD=secret
-
-# DuckDB (no server)
-DATABASE_TARGET=duckdb
-DUCKDB_PATH=hkex.duckdb
-
-# MongoDB
-DATABASE_TARGET=mongodb
-MONGODB_URI=mongodb://localhost:27017  MONGODB_DATABASE=hkex
-
-# ClickHouse
-DATABASE_TARGET=clickhouse
-CLICKHOUSE_HOST=localhost  CLICKHOUSE_DATABASE=hkex  CLICKHOUSE_USER=default
-
-# Neo4j
-DATABASE_TARGET=neo4j
-NEO4J_URI=bolt://localhost:7687  NEO4J_USER=neo4j  NEO4J_PASSWORD=secret
-```
-
 `DATABASE_TARGET` is required — there is no implicit default. See
-[Database backends](backends/README.md) for the full support matrix.
+[Database sinks](sinks/README.md) for the full support matrix.
 
 ## First run
 
@@ -111,7 +114,7 @@ The schema for every configured sink is created automatically on startup using i
 ## Verify
 
 ```bash
-hkex-scraper --coverage-report                          # chunk-level coverage
+hkex-scraper --coverage-report                                  # chunk-level coverage
 hkex-scraper --database-target postgres,sqlite --parity-report  # per-sink filing counts
 ```
 
@@ -119,8 +122,8 @@ Exit code is non-zero if **any** configured sink recorded write failures.
 
 ## Next steps
 
-- [Database backends (support matrix)](backends/README.md)
-- [PostgreSQL sink guide](postgresql.md)
+- [Database sinks (support matrix)](sinks/README.md)
+- [Per-sink guides](sinks/README.md#per-sink-guides)
 - [Configuration reference](configuration.md)
 - [CLI reference](cli.md)
 - [Troubleshooting](troubleshooting.md)

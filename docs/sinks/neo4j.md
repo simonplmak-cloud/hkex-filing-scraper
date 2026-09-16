@@ -3,7 +3,7 @@
 Persist filings and graph edges to Neo4j as nodes and relationships.
 
 - Licence: **GPLv3** (Community Edition) — OSI-approved open source. The `neo4j` Python driver
-  is Apache-2.0, so connecting to a server does not affect this project's MIT licence.
+  is Apache-2.0, so connecting to a server does not affect this project's MIT license.
 - Driver: [`neo4j`](https://pypi.org/project/neo4j/) (Bolt).
 - Extra: `neo4j`.
 
@@ -33,7 +33,7 @@ Constraints and indexes are created automatically on startup (Neo4j 5 `IF NOT EX
 
 ## Graph model
 
-```
+```text
 (:Company {id})-[:HAS_FILING]->(:Filing {filingId})
 (:Filing {filingId})-[:REFERENCES_FILING]->(:Company {id})
 ```

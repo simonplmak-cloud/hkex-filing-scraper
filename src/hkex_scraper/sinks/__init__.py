@@ -19,7 +19,7 @@ from .base import Sink as Sink
 from .base import SinkCapabilities as SinkCapabilities
 from .base import code as code
 from .base import redact as redact
-from .registry import DEFAULT_SINK as DEFAULT_SINK
+from .registry import POPULARITY_ORDER as POPULARITY_ORDER
 from .registry import SINKS as SINKS
 from .registry import SinkSpec as SinkSpec
 from .registry import UnknownSinkError as UnknownSinkError
@@ -80,7 +80,7 @@ __all__ = [
     "SINKS",
     "EDGE_KINDS",
     "ERR_NONE",
-    "DEFAULT_SINK",
+    "POPULARITY_ORDER",
     "UnknownSinkError",
     "code",
     "redact",

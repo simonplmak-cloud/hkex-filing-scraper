@@ -1,27 +1,30 @@
 # HKEx Filing Scraper — Docs
 
 An open-source Python tool that scrapes 25+ years of Hong Kong Stock Exchange (HKEx)
-regulatory filings and ingests them into PostgreSQL, MySQL/MariaDB, SQLite, DuckDB,
-MongoDB, ClickHouse, Neo4j, or SurrealDB.
+regulatory filings and ingests them into PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Neo4j,
+ClickHouse, DuckDB, or SurrealDB.
 
 ## Start here
 
 - [Getting started](getting-started.md)
-- [Database backends (support matrix)](backends/README.md)
+- [Database sinks (support matrix)](sinks/README.md)
 - [Configuration reference](configuration.md)
 - [CLI reference](cli.md)
 - [Try it locally (`examples/`)](https://github.com/simonplmak-cloud/hkex-filing-scraper/tree/main/examples)
 
-## Per-engine guides
+## Per-sink guides
 
-- [PostgreSQL](postgresql.md)
-- [MySQL / MariaDB](backends/mysql.md)
-- [SQLite](backends/sqlite.md)
-- [DuckDB](backends/duckdb.md)
-- [MongoDB](backends/mongodb.md)
-- [ClickHouse](backends/clickhouse.md)
-- [Neo4j](backends/neo4j.md)
-- SurrealDB — see [Architecture](architecture.md)
+Every sink is a first-class destination. Rows are in the documented popularity order.
+
+- `postgres` — [PostgreSQL](sinks/postgresql.md)
+- `mysql` — [MySQL and MariaDB](sinks/mysql.md)
+- `sqlite` — [SQLite](sinks/sqlite.md)
+- `mongodb` — [MongoDB](sinks/mongodb.md)
+- `mariadb` — [MySQL and MariaDB](sinks/mysql.md)
+- `neo4j` — [Neo4j](sinks/neo4j.md)
+- `clickhouse` — [ClickHouse](sinks/clickhouse.md)
+- `duckdb` — [DuckDB](sinks/duckdb.md)
+- `surrealdb` — [SurrealDB](sinks/surrealdb.md)
 
 ## Operations
 
@@ -40,11 +43,12 @@ MongoDB, ClickHouse, Neo4j, or SurrealDB.
 ## Decisions
 
 - [ADR 0001 — Versioning and release automation](adr/0001-versioning-and-release-automation.md)
-- [ADR 0002 — Multi-backend sink architecture](adr/0002-multi-sink-architecture.md)
+- [ADR 0002 — Multi-sink architecture](adr/0002-multi-sink-architecture.md)
 - [ADR 0003 — Sink support policy](adr/0003-sink-support-policy.md)
 
 ## Project
 
+- [Documentation style guide](STYLE.md)
 - [README](https://github.com/simonplmak-cloud/hkex-filing-scraper#readme)
 - [Contributing](https://github.com/simonplmak-cloud/hkex-filing-scraper/blob/main/CONTRIBUTING.md)
 - [Changelog](https://github.com/simonplmak-cloud/hkex-filing-scraper/blob/main/CHANGELOG.md)

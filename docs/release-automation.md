@@ -181,5 +181,5 @@ unblock.
   workflow trusts the tagged commit, so tag from `main` after CI is green.
 - Release **notes are generated** from commits/PRs; edit them on the Release page if you
   want a curated write-up.
-- **Dual-write is forward-only.** Publishing a release does not migrate data between
+- **Multi-sink is forward-only.** Publishing a release does not migrate data between
   SurrealDB and PostgreSQL (see [upgrading.md](upgrading.md)).

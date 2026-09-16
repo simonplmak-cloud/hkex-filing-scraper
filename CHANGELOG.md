@@ -5,11 +5,58 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `docs/STYLE.md` — one style standard for every human-facing doc (US English, sentence-case
+  headings, canonical term **sink** vs **engine**), enforced by a new `markdownlint-cli2` CI job.
+- Community files: `SUPPORT.md`, `GOVERNANCE.md`, `.github/FUNDING.yml`, and
+  `.github/ISSUE_TEMPLATE/config.yml`; `CODE_OF_CONDUCT.md` now embeds the full
+  Contributor Covenant 2.1 text, and `SECURITY.md` gains a supported-versions table, response
+  targets, scope, and a safe-harbor statement.
+- Wiki mirror: `scripts/mirror_wiki.py` renders `docs/` into GitHub wiki pages (with a generated
+  sidebar and rewritten links) and `.github/workflows/wiki.yml` pushes them on every change to
+  `docs/`. It is a no-op until the `WIKI_TOKEN` secret exists.
+- Docs site: mermaid diagrams now render (`pymdownx.superfences` custom fences), plus a logo and
+  favicon. `docs/assets/banner.svg` and a regenerated `docs/social_preview.png` show every sink.
+- `docs/sinks/surrealdb.md` — SurrealDB now has a dedicated guide, so every sink id has one page.
+- PEP 561 marker (`src/hkex_scraper/py.typed`), PEP 639 licence metadata
+  (`license = "MIT"` + `license-files`), and `Documentation`/`Changelog` entries in
+  `[project.urls]`.
+- README "How it works" mermaid diagram, badges for every sink, and a per-link table of contents.
+- De-risking register rows R14–R18 (AGPL exposure, cross-sink semantics, reproducibility,
+  repository controls, shared-PAT blast radius).
+
+### Changed
+
+- **Documented order is now popularity order** (`postgres`, `mysql`, `sqlite`, `mongodb`,
+  `mariadb`, `neo4j`, `clickhouse`, `duckdb`, `surrealdb`) everywhere: the registry, README,
+  docs, mkdocs nav, `.env.example`, CLI help, and the wiki sidebar. It is declared once in
+  `sinks/registry.py:POPULARITY_ORDER` and asserted by the docs-consistency test.
+- **All sinks are presented as first-class.** Tier language is gone from the docs, CI job names,
+  and test module names. `DEFAULT_SINK` is removed, the README no longer calls any sink
+  "recommended", and the default `.env.example` target is a neutral two-sink example.
+- `docs/backends/` is renamed to `docs/sinks/`; `docs/postgresql.md` moves to
+  `docs/sinks/postgresql.md`; `docs/architecture.md` is engine-agnostic.
+- **The `pdf` extra (PyMuPDF, pymupdf4llm) is no longer part of `[all]`** — it is AGPL-3.0 and
+  is now installed only on request, with the licence disclosed in the README, `docs/legal.md`,
+  and `pyproject.toml`.
+- Test modules renamed to drop tier language: `test_extra_sinks.py`,
+  `test_extra_sinks_integration.py`, `test_multi_sink_integration.py`; CI jobs renamed to
+  `integration-sinks-extra` and `integration-multi-sink`.
+- Documentation accuracy fixes: the README no longer claims recursive retries (HTTP retry and
+  backoff are tracked in the risk register), `constitution.md` lists all nine sinks, and
+  `docs/testing.md` is reordered and covers MySQL/MariaDB.
+- Terminology and spelling normalized across the docs and community files (US English,
+  "sink" for a configured destination, "engine" for a database product).
+- The repository homepage now points at the docs site.
+
 ## [2.0.0] - 2026-09-16
 
 ### Added
 
-- **Tier 2 sinks: MongoDB, DuckDB, ClickHouse, Neo4j.** Four more backends implement the same `Sink` contract, each an optional extra with a guarded import:
+- **MongoDB, DuckDB, ClickHouse, and Neo4j sinks.** Four more sinks implement the same `Sink` contract, each an optional extra with a guarded import:
   - `duckdb` (MIT; `duckdb` extra) — in-process analytical SQL, `ON CONFLICT` upserts, JSON columns, PK-only schema.
   - `mongodb` (SSPL, source-available; `mongodb` extra) — document model, collections keyed on `_id`, `$set` upserts; metadata and document writes never touch each other's fields.
   - `clickhouse` (Apache-2.0; `clickhouse` extra) — columnar `ReplacingMergeTree`; declares `native_upsert=False` and uses read-merge-reinsert so metadata and document writes preserve each other; reads use `FINAL`.
@@ -17,12 +64,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Uniform sink architecture.** A new `sinks/` package defines one destination contract (`Sink`), declared capabilities (`SinkCapabilities`), and a lazy registry, so the pipeline, graph linker, and CLI no longer branch on a destination name. Backends are hand-written adapters plus a small SQL dialect descriptor; there is no ORM.
 - **MySQL and MariaDB sinks** (`mysql`, `mariadb`) via the optional `PyMySQL` driver (`pip install ".[mysql]"`), with `ON DUPLICATE KEY UPDATE` upserts and `INSERT IGNORE` edge inserts.
 - **SQLite sink** (`sqlite`) using the standard-library `sqlite3` driver — no extra dependency.
-- Per-sink capability model (upsert, reads, edges, JSON, arrays, limits) and a support matrix at `docs/backends/README.md`.
-- `docs/adr/0002-multi-sink-architecture.md`, `docs/adr/0003-sink-support-policy.md`, and per-backend guides under `docs/backends/` (mysql, sqlite, duckdb, mongodb, clickhouse, neo4j).
-- CI job `integration-tier2` running MongoDB, ClickHouse, and Neo4j service containers.
+- Per-sink capability model (upsert, reads, edges, JSON, arrays, limits) and a support matrix at `docs/sinks/README.md`.
+- `docs/adr/0002-multi-sink-architecture.md`, `docs/adr/0003-sink-support-policy.md`, and per-sink guides under `docs/sinks/` (mysql, sqlite, duckdb, mongodb, clickhouse, neo4j).
+- CI job running MongoDB, ClickHouse, and Neo4j service containers.
 - **MySQL/MariaDB live integration test and CI job** (`integration-mysql`), closing the last sink without live coverage.
 - **`install-matrix` CI job** exercising the documented `pip install .` and `pip install ".[all]"` installs on a clean runner.
-- **Docs-consistency test** (`tests/test_docs_consistency.py`) that fails a PR when a sink is added or renamed without updating the README, CLI reference, configuration reference, issue templates, backend guides, `pyproject` extras, or `.env.example`.
+- **Docs-consistency test** (`tests/test_docs_consistency.py`) that fails a PR when a sink is added or renamed without updating the README, CLI reference, configuration reference, issue templates, sink guides, `pyproject` extras, or `.env.example`.
 - Governance/security: Dependabot, CodeQL workflow, secret scan in CI, `CODEOWNERS`, `CITATION.cff`, `.gitattributes`, `.editorconfig`, and a CI secret-scan job.
 - `examples/` — a `docker-compose.yml` with PostgreSQL, MySQL, MariaDB, MongoDB, ClickHouse, Neo4j, and SurrealDB, plus `quickstart.sh` and per-sink connection settings.
 - Docs: `docs/legal.md` (Terms of Use and data responsibilities), `docs/de-risking.md` (risk register), a GitHub Pages docs site (`mkdocs.yml`), and a release **rollback runbook**.
@@ -66,7 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Notes
 
-- Non-breaking: the default sink and all existing CLI flags are unchanged. Dual-write is forward-only — existing SurrealDB data is not migrated to PostgreSQL automatically.
+- Non-breaking: the default sink and all existing CLI flags are unchanged. Multi-sink is forward-only — existing SurrealDB data is not migrated to PostgreSQL automatically.
 
 [Unreleased]: https://github.com/simonplmak-cloud/hkex-filing-scraper/compare/v2.0.0...HEAD
 [2.0.0]: https://github.com/simonplmak-cloud/hkex-filing-scraper/releases/tag/v2.0.0

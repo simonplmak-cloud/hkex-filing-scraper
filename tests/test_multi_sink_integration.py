@@ -1,4 +1,4 @@
-"""Dual-write parity test: requires both SurrealDB and PostgreSQL.
+"""Multi-sink parity test: requires two or more configured sinks.
 
 Run only when ``DATABASE_TARGET`` includes both sinks and both are reachable.
 Otherwise skipped.
@@ -48,7 +48,7 @@ def test_same_filing_lands_in_both_sinks():
         "stockCode": "0005",
         "date": "01/07/2024",
         "title": title,
-        "stockName": "Dual Write Co",
+        "stockName": "Multi Sink Co",
         "link": "https://example.invalid/doc.pdf",
     }
     assert pipeline._save_filings_batch_metadata([filing]) == 1
@@ -66,7 +66,7 @@ def test_document_status_mirrors_across_sinks():
         "stockCode": "0005",
         "date": "01/07/2024",
         "title": title,
-        "stockName": "Dual Write Co",
+        "stockName": "Multi Sink Co",
         "link": "https://example.invalid/doc.pdf",
     }
     pipeline._save_filings_batch_metadata([filing])

@@ -78,10 +78,12 @@ If a published version turns out to be bad, **do not delete the tag or the relea
 people may already be pinned to it. Instead:
 
 1. **Consumers roll back by pin:** install the previous good tag or release wheel.
+
    ```bash
    pip install "git+https://github.com/simonplmak-cloud/hkex-filing-scraper@v1.1.0"
    # or download the .whl from the previous Release
    ```
+
 2. **Cut a fix-forward version** (e.g. `v2.0.1`) from `main`.
 3. **Mark the bad release** in its notes ("superseded by v2.0.1 — do not use") rather than
    removing it, so the audit trail stays intact.

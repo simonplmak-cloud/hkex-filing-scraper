@@ -1,13 +1,14 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling>=1.26", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "hkex-filing-scraper"
 dynamic = ["version"]
-description = "Scrape and ingest HKEx (Hong Kong Stock Exchange) regulatory filings into PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, ClickHouse, Neo4j, or SurrealDB with full-text extraction and graph linking."
+description = "Scrape and ingest HKEx (Hong Kong Stock Exchange) regulatory filings into PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Neo4j, ClickHouse, DuckDB, or SurrealDB with full-text extraction and graph linking."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [
     { name = "Simon Mak" },
@@ -51,6 +52,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# AGPL-3.0: PyMuPDF/pymupdf4llm. Deliberately excluded from [all] so the default
+# install stays permissive. See docs/legal.md#third-party-licences.
 pdf = ["PyMuPDF>=1.23", "pymupdf4llm>=0.0.17", "camelot-py[cv]>=0.11"]
 excel = ["openpyxl>=3.1"]
 postgres = ["psycopg[binary,pool]>=3.1"]
@@ -60,9 +63,6 @@ mongodb = ["pymongo>=4.6"]
 clickhouse = ["clickhouse-connect>=0.7"]
 neo4j = ["neo4j>=5.20"]
 all = [
-    "PyMuPDF>=1.23",
-    "pymupdf4llm>=0.0.17",
-    "camelot-py[cv]>=0.11",
     "openpyxl>=3.1",
     "python-dotenv>=1.0",
     "psycopg[binary,pool]>=3.1",
@@ -82,8 +82,10 @@ hkex-scraper = "hkex_scraper.main:main"
 
 [project.urls]
 Homepage = "https://github.com/simonplmak-cloud/hkex-filing-scraper"
+Documentation = "https://simonplmak-cloud.github.io/hkex-filing-scraper/"
 Repository = "https://github.com/simonplmak-cloud/hkex-filing-scraper"
 Issues = "https://github.com/simonplmak-cloud/hkex-filing-scraper/issues"
+Changelog = "https://github.com/simonplmak-cloud/hkex-filing-scraper/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hkex_scraper"]

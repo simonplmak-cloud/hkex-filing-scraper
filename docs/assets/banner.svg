@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="HKEx Filing Scraper — one scraper, eight database sinks">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="0.55" stop-color="#0e1730"/>
+      <stop offset="1" stop-color="#111c3a"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="0.5" stop-color="#0ea5e9"/>
+      <stop offset="1" stop-color="#22c55e"/>
+    </linearGradient>
+    <style>
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 62px; font-weight: 700; fill: #f8fafc; }
+      .subtitle { font-family: Arial, Helvetica, sans-serif; font-size: 26px; fill: #94a3b8; }
+      .chip { fill: #111c35; stroke: #1e293b; stroke-width: 1.5; }
+      .chip-label { font-family: Arial, Helvetica, sans-serif; font-size: 22px; fill: #e2e8f0; }
+      .footer { font-family: Arial, Helvetica, sans-serif; font-size: 18px; fill: #64748b; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1280" height="8" fill="url(#rule)"/>
+
+  <text class="title" x="96" y="150">HKEx Filing Scraper</text>
+  <text class="subtitle" x="96" y="200">Scrape 25+ years of Hong Kong regulatory filings into any database</text>
+
+  <!-- Row 1 -->
+  <g>
+    <rect class="chip" x="96" y="288" width="248" height="64" rx="14"/>
+    <circle cx="130" cy="320" r="8" fill="#4169e1"/>
+    <text class="chip-label" x="154" y="328">PostgreSQL</text>
+
+    <rect class="chip" x="368" y="288" width="248" height="64" rx="14"/>
+    <circle cx="402" cy="320" r="8" fill="#22c55e"/>
+    <text class="chip-label" x="426" y="328">MySQL / MariaDB</text>
+
+    <rect class="chip" x="640" y="288" width="248" height="64" rx="14"/>
+    <circle cx="674" cy="320" r="8" fill="#0ea5e9"/>
+    <text class="chip-label" x="698" y="328">SQLite</text>
+
+    <rect class="chip" x="912" y="288" width="248" height="64" rx="14"/>
+    <circle cx="946" cy="320" r="8" fill="#fbbf24"/>
+    <text class="chip-label" x="970" y="328">DuckDB</text>
+  </g>
+
+  <!-- Row 2 -->
+  <g>
+    <rect class="chip" x="96" y="376" width="248" height="64" rx="14"/>
+    <circle cx="130" cy="408" r="8" fill="#47a248"/>
+    <text class="chip-label" x="154" y="416">MongoDB</text>
+
+    <rect class="chip" x="368" y="376" width="248" height="64" rx="14"/>
+    <circle cx="402" cy="408" r="8" fill="#fb923c"/>
+    <text class="chip-label" x="426" y="416">ClickHouse</text>
+
+    <rect class="chip" x="640" y="376" width="248" height="64" rx="14"/>
+    <circle cx="674" cy="408" r="8" fill="#22d3ee"/>
+    <text class="chip-label" x="698" y="416">Neo4j</text>
+
+    <rect class="chip" x="912" y="376" width="248" height="64" rx="14"/>
+    <circle cx="946" cy="408" r="8" fill="#ff00a0"/>
+    <text class="chip-label" x="970" y="416">SurrealDB</text>
+  </g>
+
+  <text class="subtitle" x="96" y="500" style="font-size:22px;fill:#7dd3fc">DATABASE_TARGET=postgres,mysql,sqlite,duckdb,mongodb,clickhouse,neo4j,surrealdb</text>
+
+  <text class="footer" x="96" y="572">github.com/simonplmak-cloud/hkex-filing-scraper</text>
+  <text class="footer" x="1184" y="572" text-anchor="end">MIT License</text>
+</svg>

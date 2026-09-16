@@ -1,6 +1,6 @@
 # CLI Reference
 
-```
+```text
 hkex-scraper [options]
 ```
 
@@ -16,7 +16,7 @@ hkex-scraper [options]
 | `--backfill-docs` | flag | off | Phase 2 only — process documents for filings already in the database. |
 | `--link-only` | flag | off | Only create/refresh graph edges. |
 | `--dry-run` | flag | off | Fetch data but write nothing. |
-| `--database-target SINKS` | comma-separated sink ids | from `DATABASE_TARGET` | Override the sinks for this run. Valid: `postgres`, `mysql`, `mariadb`, `sqlite`, `duckdb`, `mongodb`, `clickhouse`, `neo4j`, `surrealdb`. Order sets read precedence. |
+| `--database-target SINKS` | comma-separated sink ids | from `DATABASE_TARGET` | Override the sinks for this run. Valid: `postgres`, `mysql`, `sqlite`, `mongodb`, `mariadb`, `neo4j`, `clickhouse`, `duckdb`, `surrealdb`. Order sets read precedence. |
 | `--coverage-report` | flag | off | Print chunk coverage from the read source, then exit. |
 | `--parity-report` | flag | off | Print per-sink filing counts and the spread, then exit. Requires two or more sinks. |
 | `--version` | flag | — | Print the version and exit. |
@@ -43,7 +43,7 @@ hkex-scraper --backfill-docs --limit 50
 # Rebuild graph edges from existing filings
 hkex-scraper --link-only
 
-# Trial PostgreSQL without touching SurrealDB
+# Write to SQLite only for this run
 hkex-scraper --database-target postgres --limit 100
 
 # Validate config without writing

@@ -1,4 +1,4 @@
-# ADR 0002 — Multi-backend sink architecture
+# ADR 0002 — Multi-sink architecture
 
 - Status: Accepted
 - Date: 2026-09-16
@@ -22,7 +22,7 @@ switchboard.
 - Introduce a `sinks/` package with **one uniform contract** (`Sink`),
   **declared capabilities** (`SinkCapabilities`), and a **lazy registry**
   (`registry.SINKS`) so no optional driver is imported until its sink is requested.
-- Implement backends as **hand-written adapters** plus a small **SQL dialect
+- Implement sinks as **hand-written adapters** plus a small **SQL dialect
   descriptor** (`Dialect`). There is no ORM and no plugin-discovery machinery.
 - Keep the relational engines (MySQL/MariaDB, SQLite) on a shared execution loop
   (`RelationalSink`); keep PostgreSQL on its existing, already-tested module
@@ -40,15 +40,15 @@ switchboard.
 
 | Alternative | Why not chosen |
 | ----------- | -------------- |
-| Keep adding `if postgres_enabled(): …` branches | Four-file edit per backend; the class of bug this ADR removes. |
+| Keep adding `if postgres_enabled(): …` branches | Four-file edit per sink; the class of bug this ADR removes. |
 | SQLAlchemy / an ORM | Constitution prohibits dependency creep; an ORM is heavier than the four dialects in use and hides the DDL we want to assert in tests. |
 | Entry-point plugin discovery | Runtime plugin failures are hard to diagnose and it adds packaging machinery for a handful of first-party sinks. |
 | One shared schema-less "document" store for all sinks | Loses each engine's strengths (typed columns, `jsonb`, graph edges) and makes parity reporting meaningless. |
-| Independent per-sink modules with no shared core | Duplicates batching, retries, redaction, and degradation logic across every backend. |
+| Independent per-sink modules with no shared core | Duplicates batching, retries, redaction, and degradation logic across every sink. |
 
 ## Consequences
 
-- Adding a backend is a localised change: one adapter (or dialect entry) + one registry
+- Adding a sink is a localised change: one adapter (or dialect entry) + one registry
   entry + one test file.
 - Capability differences are explicit, so the dispatcher adapts instead of pretending
   parity. ClickHouse's lack of native upsert, for example, will be declared rather than

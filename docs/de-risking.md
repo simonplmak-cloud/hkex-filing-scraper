@@ -14,13 +14,19 @@ Living document. Reviewed at every release. Scores are **L×I** (likelihood × i
 | R6 | Breaking change adoption friction | 4 | 3 | 12 | `docs/upgrading.md`, fail-fast message · **added:** v2.0.0 migration table; **planned:** deprecation shim | C1/C3 |
 | R7 | Legal / HKEx Terms of Use | 2 | 5 | 10 | README note · **added:**`docs/legal.md` + prominent README section | C1 |
 | R8 | Secrets leakage | 2 | 5 | 10 | secret scanning, `redact()` tests · **added:** CI secret-scan job | C1 |
-| R9 | Dependency abandonment / licence change | 3 | 3 | 9 | ADR 0003, optional extras, pinned ruff · **added:** Dependabot | C1 |
+| R9 | Dependency abandonment / license change | 3 | 3 | 9 | ADR 0003, optional extras, pinned ruff · **added:** Dependabot | C1 |
 | R10 | Untested sink paths (MySQL live, `.[all]` install) | 3 | 3 | 9 | unit tests · **added:** MySQL/MariaDB CI, `install-matrix` | C1 |
 | R11 | Supply chain / provenance | 2 | 4 | 8 | secret scanning · **added:** CodeQL; **planned:** SBOM + build attestation + Scorecard | C1/C2 |
 | R12 | Scale / performance | 3 | 3 | 9 | batching, parallel downloads, 25 MB cap · **planned:** perf budget test, run report | C2/C3 |
 | R13 | Release / rollback risk | 2 | 3 | 6 | tag-driven release, checksums, smoke test · **added:** rollback runbook; **planned:** attestation | C1/C2 |
+| R14 | Optional AGPL dependency (`pdf` extra) creates licence obligations | 3 | 3 | 9 | `pdf` is excluded from `[all]`; disclosed in README, docs/legal.md, and pyproject; **planned:** licence-scan CI gate | C1 |
+| R15 | Cross-sink semantic drift (collation, timestamp precision, eventual dedup) | 3 | 4 | 12 | idempotent upserts, no-clobber, per-sink counters · **planned:** `--verify` semantic reconciliation, utf8mb4/exact collations, ClickHouse `version` + `FINAL` | C2 |
+| R16 | Non-reproducible CI installs | 3 | 3 | 9 | pinned ruff range · **planned:** `uv.lock` + hash-verified installs, pinned container images | C1 |
+| R17 | Repository controls weaker than assumed (no review, no signatures, mutable action tags) | 3 | 4 | 12 | branch protection, conversation resolution · **planned:** strict up-to-date, code-owner review, SHA-pinned actions; signatures deferred (no signing key configured) | C1 |
+| R18 | Shared PAT used as the wiki-mirror secret (broad blast radius, shared expiry) | 3 | 4 | 12 | secret scanning + push protection, workflow limited to `push`→`main`/dispatch, `contents: read`, `::add-mask::` · **planned:** `wiki` environment gate, 90-day rotation runbook, dedicated token | C1 |
 
 ## High-leverage controls (do these first)
+
 1. **R1 — recorded HKEx fixtures + canary.** The only risk that can make the tool silently wrong.
 2. **R4 — docs-consistency test.** Prevents the drift that already happened.
 3. **R10 — MySQL live CI + `.[all]` install test.** Closes the two known verification holes.
@@ -28,6 +34,7 @@ Living document. Reviewed at every release. Scores are **L×I** (likelihood × i
 5. **R2 — `--verify` reconciliation.** Turns "we hope the sinks agree" into a checked invariant.
 
 ## Success metrics (targets)
+
 | Metric | Target |
 |--------|--------|
 | Register risks with an automated control | ≥ 80% |
@@ -36,7 +43,9 @@ Living document. Reviewed at every release. Scores are **L×I** (likelihood × i
 | Time to detect an HKEx API break | < 24 h (canary) |
 | Release rollback time | < 5 min (pin previous tag) |
 | Open high-severity security alerts | 0 |
+| Release artifacts with build provenance + SBOM | 100% (next release) |
 
 ## Ownership & cadence
+
 Maintainer: Simon Mak. Review at each release (or quarterly if no release). New risks are
 added with an L×I score and at least one control; a risk with no control is a release blocker.

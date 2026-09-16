@@ -21,6 +21,14 @@ jobs:
       - name: ruff format --check
         run: ruff format --check
 
+  markdown:
+    name: Markdown lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: markdownlint-cli2
+        uses: DavidAnson/markdownlint-cli2-action@v24
+
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-latest
@@ -179,8 +187,8 @@ jobs:
           COMPANY_TABLE: company
         run: pytest -q tests/test_surrealdb_integration.py
 
-  integration-dual-write:
-    name: Dual-write integration
+  integration-multi-sink:
+    name: Multi-sink integration
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -222,10 +230,10 @@ jobs:
           pytest -q \
             tests/test_postgres_integration.py \
             tests/test_surrealdb_integration.py \
-            tests/test_dual_write_integration.py
+            tests/test_multi_sink_integration.py
 
-  integration-tier2:
-    name: Tier 2 integration (MongoDB, ClickHouse, Neo4j)
+  integration-sinks-extra:
+    name: Sinks integration (MongoDB, ClickHouse, Neo4j)
     runs-on: ubuntu-latest
     services:
       mongodb:
@@ -270,4 +278,4 @@ jobs:
           NEO4J_URI: bolt://localhost:7687
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: hkexpassword
-        run: pytest -q tests/test_tier2_integration.py
+        run: pytest -q tests/test_extra_sinks_integration.py
