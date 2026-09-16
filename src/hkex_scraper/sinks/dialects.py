@@ -477,3 +477,55 @@ class SQLiteDialect(Dialect):
                 f"({self.columns(cols)})"
             )
         return statements
+
+
+class DuckDBDialect(Dialect):
+    """DuckDB dialect. In-process analytical SQL; JSON stored as JSON text."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            id="duckdb",
+            ph="?",
+            quote_char='"',
+            text_type="VARCHAR",
+            long_text_type="VARCHAR",
+            int_type="INTEGER",
+            bigint_type="BIGINT",
+            bool_type="BOOLEAN",
+            datetime_type="TIMESTAMP",
+            date_type="DATE",
+            json_type="JSON",
+            array_type="JSON",
+            edge_conflict="do-nothing",
+            supports_returning=True,
+        )
+
+    def ddl(self) -> List[str]:
+        # Primary keys only; DuckDB does not need (and is faster without) mirror indexes.
+        coverage = (
+            f"CREATE TABLE IF NOT EXISTS {self.q('scrape_coverage')} ("
+            f"{self.q('chunk_from')} {self.datetime_type} NOT NULL, "
+            f"{self.q('chunk_to')} {self.datetime_type} NOT NULL, "
+            f"{self.q('api_count')} {self.int_type} NOT NULL, "
+            f"{self.q('ingested_count')} {self.int_type} NOT NULL, "
+            f"{self.q('unique_count')} {self.int_type} NOT NULL, "
+            f"{self.q('run_id')} {self.text_type} NOT NULL, "
+            f"{self.q('timestamp')} {self.datetime_type} NOT NULL, "
+            f"PRIMARY KEY ({self.columns(COVERAGE_KEY)}))"
+        )
+        return [
+            f"CREATE TABLE IF NOT EXISTS {self.q('exchange_filing')} ({self._column_ddl()})",
+            coverage,
+            self._edge_ddl("has_filing"),
+            self._edge_ddl("references_filing"),
+        ]
+
+    # ``RETURNING`` lets the shared engine count affected rows (DuckDB has no rowcount).
+    def upsert_document_sql(self) -> str:
+        return super().upsert_document_sql() + " RETURNING 1"
+
+    def mark_status_sql(self) -> str:
+        return super().mark_status_sql() + " RETURNING 1"
+
+    def upsert_edge_sql(self, kind: str) -> str:
+        return super().upsert_edge_sql(kind) + " RETURNING 1"

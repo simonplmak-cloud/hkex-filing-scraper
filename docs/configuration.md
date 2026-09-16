@@ -63,6 +63,50 @@ Required when `DATABASE_TARGET` includes `sqlite`. No extra dependency (stdlib `
 | -------- | ------- | ----------- |
 | `SQLITE_PATH` | — | Filesystem path to the database file, or `:memory:` for an ephemeral database. |
 
+## DuckDB
+
+Required when `DATABASE_TARGET` includes `duckdb`. Install the driver with
+`pip install ".[duckdb]"`.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `DUCKDB_PATH` | — | Filesystem path to the database file, or `:memory:`. |
+
+## MongoDB
+
+Required when `DATABASE_TARGET` includes `mongodb`. Install the driver with
+`pip install ".[mongodb]"`.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `MONGODB_URI` | — | Connection URI, e.g. `mongodb://user:pass@host:27017/?authSource=admin`. |
+| `MONGODB_DATABASE` | — | Database name. |
+
+## ClickHouse
+
+Required when `DATABASE_TARGET` includes `clickhouse`. Install the driver with
+`pip install ".[clickhouse]"`.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `CLICKHOUSE_HOST` | — | Host. |
+| `CLICKHOUSE_PORT` | `8123` | HTTP port. |
+| `CLICKHOUSE_DATABASE` | — | Database name (must exist). |
+| `CLICKHOUSE_USER` | `default` | User. |
+| `CLICKHOUSE_PASSWORD` | — | Password. |
+
+## Neo4j
+
+Required when `DATABASE_TARGET` includes `neo4j`. Install the driver with
+`pip install ".[neo4j]"`.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `NEO4J_URI` | — | Bolt URI, e.g. `bolt://localhost:7687`. |
+| `NEO4J_USER` | — | User. |
+| `NEO4J_PASSWORD` | — | Password. |
+| `NEO4J_DATABASE` | — | Database name; omit for the server default. |
+
 ## Graph linking
 
 | Variable | Default | Description |

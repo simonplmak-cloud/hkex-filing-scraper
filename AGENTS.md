@@ -11,6 +11,7 @@ pip install -e ".[dev,all]"      # dev install (editable + test/lint deps + doc 
 pip install .                     # minimal install (no doc extraction, no drivers; SQLite works)
 pip install ".[postgres]"         # add the optional psycopg driver
 pip install ".[mysql]"            # add the optional PyMySQL driver (MySQL/MariaDB)
+pip install ".[duckdb]"           # or [mongodb], [clickhouse], [neo4j]
 pytest                            # run all tests (no DB/network needed)
 ruff check                        # lint (target: py310, line-length: 100)
 ```
@@ -46,7 +47,10 @@ Phase 1 is always followed by Phase 2 unless `--metadata-only` is passed. `--bac
 | `sinks/registry.py` | Lazy id→factory map with licence/OSI/extra metadata |
 | `sinks/dialects.py` | Per-dialect SQL: placeholders, quoting, types, upsert/DDL/select builders |
 | `sinks/relational.py` | Shared relational engine (batching, redaction, degradation) |
-| `sinks/postgres.py` / `mysql.py` / `sqlite.py` | PostgreSQL adapter; MySQL/MariaDB; SQLite |
+| `sinks/postgres.py` / `mysql.py` / `sqlite.py` / `duckdb.py` | Relational adapters (PostgreSQL; MySQL/MariaDB; SQLite; DuckDB) |
+| `sinks/mongodb.py` | Document sink (`$set` upserts, collections keyed on `_id`) |
+| `sinks/clickhouse.py` | Columnar sink (`ReplacingMergeTree`, read-merge-reinsert, `FINAL` reads) |
+| `sinks/neo4j.py` | Graph sink (`MERGE` nodes/relationships, Cypher reads) |
 | `sinks/surrealdb.py` | SurrealDB adapter: SurrealQL, `RELATE`, RPC→`/sql` document fallback, company-id resolution |
 | `graph.py` | `has_filing` and `references_filing` edge dispatch to every edge-capable sink |
 | `utils.py` | Logging, string helpers, filing classification, ticker extraction, company-key helpers |
@@ -64,15 +68,16 @@ Phase 1 is always followed by Phase 2 unless `--metadata-only` is passed. `--bac
 
 ## Database sinks
 
-`DATABASE_TARGET` is an ordered, comma-separated list of sink ids: `postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb`. There is no default — an unset or unknown value fails fast.
+`DATABASE_TARGET` is an ordered, comma-separated list of sink ids: `postgres`, `mysql`, `mariadb`, `sqlite`, `duckdb`, `mongodb`, `clickhouse`, `neo4j`, `surrealdb`. There is no default — an unset or unknown value fails fast.
 
 - **Contract**: `sinks/base.py:Sink`. Every method returns `(value, error_code)` with `""` meaning success; no method raises for a driver/connection problem. Capability differences are declared in `SinkCapabilities`.
 - **Registry**: `sinks/registry.py:SINKS` maps each id to `SinkSpec{label, license, source_available, extra, factory}`; factories import the sink module (and driver) lazily.
-- **Relational sinks** (PostgreSQL, MySQL/MariaDB, SQLite) share `sinks/relational.py` + a `sinks/dialects.py:Dialect`. PostgreSQL keeps its dedicated `db_postgres.py` behind `PostgresSink` (pooling, `jsonb`, GIN).
-- **Idempotency**: PostgreSQL/SQLite use `ON CONFLICT DO UPDATE`, MySQL/MariaDB use `ON DUPLICATE KEY UPDATE`, edges are conflict-no-op (`INSERT IGNORE` on MySQL). A metadata upsert never touches `document_*` columns; a document write only updates an existing row.
+- **Relational sinks** (PostgreSQL, MySQL/MariaDB, SQLite, DuckDB) share `sinks/relational.py` + a `sinks/dialects.py:Dialect`. PostgreSQL keeps its dedicated `db_postgres.py` behind `PostgresSink` (pooling, `jsonb`, GIN). DuckDB has no `rowcount`, so its dialect appends `RETURNING 1`.
+- **Idempotency**: PostgreSQL/SQLite/DuckDB use `ON CONFLICT DO UPDATE`, MySQL/MariaDB `ON DUPLICATE KEY UPDATE`, MongoDB `update_one(upsert=True)`, Neo4j `MERGE`, ClickHouse `ReplacingMergeTree` + read-merge-reinsert (`native_upsert=False`). A metadata upsert never touches `document_*` columns; a document write only updates an existing record.
 - **MySQL/MariaDB**: MySQL driver is `PyMySQL` (extra `mysql`); the `mariadb` sink reads `MARIADB_*` and falls back to `MYSQL_*`. Indexes are declared inline because MySQL lacks `CREATE INDEX IF NOT EXISTS`.
-- **SQLite**: stdlib `sqlite3`, no extra; `SQLITE_PATH` (or `:memory:`); datetimes stored as ISO-8601 text, JSON columns as JSON text.
-- **Schema mirror**: any new SurrealDB field must be added to `db.py:_build_schema_sql()`, `db_postgres.py:_build_postgres_schema_sql()`, and `sinks/dialects.py:Dialect._column_ddl()`.
+- **SQLite / DuckDB**: SQLite uses stdlib `sqlite3`; DuckDB uses the `duckdb` extra. Both take a file path or `:memory:` (`SQLITE_PATH` / `DUCKDB_PATH`); datetimes/JSON are stored as ISO text / JSON.
+- **MongoDB / Neo4j**: document and graph models. MongoDB stores `filing_id` as both `_id` and a field; Neo4j stores `documentTables` as a JSON string (no nested maps) and `referencedTickers` as a string array.
+- **Schema mirror**: any new SurrealDB field must be added to `db.py:_build_schema_sql()`, `db_postgres.py:_build_postgres_schema_sql()`, and `sinks/dialects.py:Dialect._column_ddl()` (plus the MongoDB/Neo4j/ClickHouse field lists).
 - **Read routing**: reads (pending filings, distinct tickers, titles, coverage) are served by the first configured sink whose capabilities include `reads`.
 - **Failure isolation**: per-sink counters live in `pipeline.SINK_STATS`; every configured sink is required, so `pipeline.sink_exit_code()` is non-zero when any sink failed. The CLI prints a sink summary every run.
 - **Credentials**: DSNs are never logged. `sinks/base.py:redact()` (and `db_postgres._redact()`) scrub `password=` and URL credentials from error text.
@@ -90,7 +95,7 @@ See `api.py:fetch_chunk_via_api()`. The API limits searches to 1 month at a time
 
 ## Development rules
 
-- `requests` and `beautifulsoup4` are base deps (always available). PDF/Excel extraction libs and the PostgreSQL (`psycopg[binary,pool]`) and MySQL/MariaDB (`PyMySQL`) drivers are optional — code uses graceful fallbacks with `_AVAILABLE` flags. SQLite uses the stdlib and needs no extra.
+- `requests` and `beautifulsoup4` are base deps (always available). PDF/Excel extraction libs and every database driver (`psycopg[binary,pool]`, `PyMySQL`, `duckdb`, `pymongo`, `clickhouse-connect`, `neo4j`) are optional — code uses graceful fallbacks with `_AVAILABLE` flags. SQLite uses the stdlib and needs no extra.
 - `python-dotenv` is **not** in base deps — `config.py` gracefully falls back if it's missing. Install `[all]` extras to get it.
 - Log files go to `logs/` in CWD. Failed SQL is appended to `logs/hkex_failed.sql`.
 - Tests are in `tests/` and are pure unit tests — no DB or network. Run with plain `pytest`.

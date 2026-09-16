@@ -12,9 +12,36 @@ from hkex_scraper import config, sinks
 class TestRegistry:
     def test_known_ids(self):
         ids = sinks.known_ids()
-        for expected in ("postgres", "mysql", "mariadb", "sqlite", "surrealdb"):
+        for expected in (
+            "postgres",
+            "mysql",
+            "mariadb",
+            "sqlite",
+            "surrealdb",
+            "duckdb",
+            "mongodb",
+            "clickhouse",
+            "neo4j",
+        ):
             assert expected in ids
         assert ids == sorted(ids)
+
+    def test_tier1_extra_metadata(self):
+        assert sinks.spec("postgres").source_available is True
+        assert sinks.spec("mysql").extra == "mysql"
+        assert sinks.spec("sqlite").extra is None
+        assert sinks.spec("surrealdb").source_available is False
+
+    def test_tier2_extra_metadata(self):
+        assert sinks.spec("duckdb").source_available is True
+        assert sinks.spec("duckdb").extra == "duckdb"
+        assert sinks.spec("clickhouse").source_available is True
+        assert sinks.spec("clickhouse").extra == "clickhouse"
+        assert sinks.spec("neo4j").source_available is True
+        assert sinks.spec("neo4j").extra == "neo4j"
+        # MongoDB is SSPL — source-available, not OSI.
+        assert sinks.spec("mongodb").source_available is False
+        assert sinks.spec("mongodb").extra == "mongodb"
 
     def test_get_sink_is_lazy_for_optional_drivers(self, monkeypatch):
         # Selecting the stdlib-backed sink must not import an optional driver.

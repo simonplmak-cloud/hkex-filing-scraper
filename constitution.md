@@ -59,11 +59,14 @@ When more than one sink is configured, every record written to one sink MUST be 
 | Optional PDF | PyMuPDF, pymupdf4llm, camelot-py | guarded by `_AVAILABLE` flags |
 | Optional Excel | openpyxl | guarded by `_AVAILABLE` flags |
 | Optional env | python-dotenv | graceful fallback if missing |
-| Database sinks | PostgreSQL, MySQL/MariaDB, SQLite, SurrealDB | selected via ordered `DATABASE_TARGET`; contract in `sinks/base.py:Sink`, registry in `sinks/registry.py` |
+| Database sinks | PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, ClickHouse, Neo4j, SurrealDB | selected via ordered `DATABASE_TARGET`; contract in `sinks/base.py:Sink`, registry in `sinks/registry.py` |
 | Relational PostgreSQL | PostgreSQL 13+ | `psycopg` 3.x (`psycopg[binary,pool]`), `ON CONFLICT` upserts, JSONB for tables |
 | Relational MySQL/MariaDB | MySQL 8 / MariaDB 10.5+ | `PyMySQL` (`mysql` extra), `ON DUPLICATE KEY UPDATE` upserts |
-| Relational SQLite | SQLite 3 | stdlib `sqlite3`, no extra |
-| Graph/document | SurrealDB | `/sql` (1 MiB) + `/rpc` (4 MiB) endpoints |
+| Relational SQLite / DuckDB | SQLite 3 / DuckDB 1.x | stdlib `sqlite3`; `duckdb` extra; `ON CONFLICT` upserts, JSON columns |
+| Document MongoDB | MongoDB 6+ | `pymongo` (`mongodb` extra), `$set` upserts on `_id` |
+| Columnar ClickHouse | ClickHouse 24+ | `clickhouse-connect` (`clickhouse` extra), `ReplacingMergeTree` |
+| Graph Neo4j | Neo4j 5 (Community) | `neo4j` driver (`neo4j` extra), `MERGE` nodes/relationships |
+| Graph/document SurrealDB | SurrealDB | `/sql` (1 MiB) + `/rpc` (4 MiB) endpoints |
 | Testing | pytest | pure unit tests, no DB/network |
 | Lint | ruff | py310 target, line-length 100 |
 
@@ -78,7 +81,7 @@ When more than one sink is configured, every record written to one sink MUST be 
 | `filingId` | MD5 hash of key fields used for deduplication (primary key in both sinks) |
 | `documentStatus` | `processed` / `skipped` / `failed` outcome of document processing |
 | Graph edge | `has_filing` (company → filing) or `references_filing` (title mention) |
-| Sink | A configured persistence target — one of `postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb` (`DATABASE_TARGET`, an ordered CSV list) |
+| Sink | A configured persistence target — one of `postgres`, `mysql`, `mariadb`, `sqlite`, `duckdb`, `mongodb`, `clickhouse`, `neo4j`, `surrealdb` (`DATABASE_TARGET`, an ordered CSV list) |
 | Multi-write | Writing the same record to every configured sink within one pipeline phase |
 
 ## Security Constraints

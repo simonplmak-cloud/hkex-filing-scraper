@@ -179,6 +179,34 @@ def mysql_conn_kwargs(prefix: str = "MYSQL") -> Dict[str, object]:
 SQLITE_PATH: str = os.environ.get("SQLITE_PATH", "")
 
 # ---------------------------------------------------------------------------
+# DuckDB connection (optional sink)
+# ---------------------------------------------------------------------------
+DUCKDB_PATH: str = os.environ.get("DUCKDB_PATH", "")
+
+# ---------------------------------------------------------------------------
+# MongoDB connection (optional sink)
+# ---------------------------------------------------------------------------
+MONGODB_URI: str = os.environ.get("MONGODB_URI", "")
+MONGODB_DATABASE: str = os.environ.get("MONGODB_DATABASE", "")
+
+# ---------------------------------------------------------------------------
+# ClickHouse connection (optional sink)
+# ---------------------------------------------------------------------------
+CLICKHOUSE_HOST: str = os.environ.get("CLICKHOUSE_HOST", "")
+CLICKHOUSE_PORT: str = os.environ.get("CLICKHOUSE_PORT", "8123")
+CLICKHOUSE_DATABASE: str = os.environ.get("CLICKHOUSE_DATABASE", "")
+CLICKHOUSE_USER: str = os.environ.get("CLICKHOUSE_USER", "")
+CLICKHOUSE_PASSWORD: str = os.environ.get("CLICKHOUSE_PASSWORD", "")
+
+# ---------------------------------------------------------------------------
+# Neo4j connection (optional sink)
+# ---------------------------------------------------------------------------
+NEO4J_URI: str = os.environ.get("NEO4J_URI", "")
+NEO4J_USER: str = os.environ.get("NEO4J_USER", "")
+NEO4J_PASSWORD: str = os.environ.get("NEO4J_PASSWORD", "")
+NEO4J_DATABASE: str = os.environ.get("NEO4J_DATABASE", "")
+
+# ---------------------------------------------------------------------------
 # Graph linking (optional)
 # ---------------------------------------------------------------------------
 # Set COMPANY_TABLE to the name of your company table to enable graph edges.

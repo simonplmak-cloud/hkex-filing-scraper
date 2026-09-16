@@ -56,6 +56,30 @@ def _surrealdb() -> Sink:
     return SurrealDBSink()
 
 
+def _duckdb() -> Sink:
+    from .duckdb import DuckDBSink
+
+    return DuckDBSink()
+
+
+def _mongodb() -> Sink:
+    from .mongodb import MongoDBSink
+
+    return MongoDBSink()
+
+
+def _clickhouse() -> Sink:
+    from .clickhouse import ClickHouseSink
+
+    return ClickHouseSink()
+
+
+def _neo4j() -> Sink:
+    from .neo4j import Neo4jSink
+
+    return Neo4jSink()
+
+
 SINKS: Dict[str, SinkSpec] = {
     "postgres": SinkSpec(
         id="postgres",
@@ -96,6 +120,38 @@ SINKS: Dict[str, SinkSpec] = {
         source_available=False,
         extra=None,
         factory=_surrealdb,
+    ),
+    "duckdb": SinkSpec(
+        id="duckdb",
+        label="DuckDB",
+        license="MIT",
+        source_available=True,
+        extra="duckdb",
+        factory=_duckdb,
+    ),
+    "mongodb": SinkSpec(
+        id="mongodb",
+        label="MongoDB",
+        license="SSPL (source-available)",
+        source_available=False,
+        extra="mongodb",
+        factory=_mongodb,
+    ),
+    "clickhouse": SinkSpec(
+        id="clickhouse",
+        label="ClickHouse",
+        license="Apache-2.0",
+        source_available=True,
+        extra="clickhouse",
+        factory=_clickhouse,
+    ),
+    "neo4j": SinkSpec(
+        id="neo4j",
+        label="Neo4j (Community)",
+        license="GPLv3 (Community)",
+        source_available=True,
+        extra="neo4j",
+        factory=_neo4j,
     ),
 }
 

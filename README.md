@@ -10,8 +10,10 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com)
 [![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)](https://sqlite.org)
+[![DuckDB](https://img.shields.io/badge/DuckDB-FFF000?logo=duckdb&logoColor=black)](https://duckdb.org)
+[![MongoDB](https://img.shields.io/badge/MongoDB-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com)
 
-An open-source Python tool that scrapes 25+ years of Hong Kong Stock Exchange (HKEx) regulatory filings and ingests them into **any combination of PostgreSQL, MySQL/MariaDB, SQLite, and SurrealDB** — with full-text extraction from PDF/HTML/Excel documents, structured tables, coverage tracking, and optional graph linking.
+An open-source Python tool that scrapes 25+ years of Hong Kong Stock Exchange (HKEx) regulatory filings and ingests them into **any combination of PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, ClickHouse, Neo4j, and SurrealDB** — with full-text extraction from PDF/HTML/Excel documents, structured tables, coverage tracking, and optional graph linking.
 
 It uses the undocumented HKEx JSON API directly, which is significantly faster and more reliable than browser-based scraping.
 
@@ -26,8 +28,8 @@ The **multi-sink** design means you don't have to adopt a new database to use it
 - **Fast API scraping** — direct HKEx JSON API, no browser/Selenium.
 - **Full history** — every filing from April 1999 to today, with chunk-level coverage verification.
 - **Document processing** — downloads PDF/HTML/Excel and extracts full text plus structured tables (Markdown).
-- **Multi-sink** — write to any combination of PostgreSQL, MySQL/MariaDB, SQLite, and SurrealDB via `DATABASE_TARGET` (an ordered, comma-separated list). Relational sinks mirror filings, documents, coverage, and edges with idempotent upserts; `document_tables` is `jsonb` on PostgreSQL and JSON elsewhere.
-- **Graph linking** (SurrealDB) — optional `(company)-[has_filing]->(filing)` and `(filing)-[references_filing]->(company)` edges.
+- **Multi-sink** — write to any combination of PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, ClickHouse, Neo4j, and SurrealDB via `DATABASE_TARGET` (an ordered, comma-separated list). Relational sinks mirror filings, documents, coverage, and edges with idempotent upserts; `document_tables` is `jsonb` on PostgreSQL and JSON elsewhere.
+- **Graph linking** — optional `(company)-[has_filing]->(filing)` and `(filing)-[references_filing]->(company)` edges, natively on SurrealDB and Neo4j.
 - **Resilient & parallel** — batching, parallel downloads, recursive retries, stalled-job detection.
 - **Failure isolation** — a failure on one sink never blocks or rolls back another; per-sink counters are reported every run, and the run exits non-zero if any configured sink failed.
 - **Optional dependencies** — core is `requests` + `beautifulsoup4`; PDF/Excel extraction and the PostgreSQL/MySQL drivers are extras with graceful fallback. SQLite needs no extra.
@@ -51,9 +53,13 @@ pip install ".[postgres]"
 
 # Add only the MySQL/MariaDB sink driver
 pip install ".[mysql]"
+
+# Add a Tier 2 sink driver
+pip install ".[duckdb]"       # or: mongodb, clickhouse, neo4j
 ```
 
-Optional extras: `pdf`, `excel`, `postgres`, `mysql`, `all`, `dev`. SQLite needs no extra.
+Optional extras: `pdf`, `excel`, `postgres`, `mysql`, `duckdb`, `mongodb`, `clickhouse`,
+`neo4j`, `all`, `dev`. SQLite needs no extra.
 
 ## Quick start
 
@@ -106,6 +112,30 @@ hkex-scraper
 #   ... connection settings for each ...
 hkex-scraper --parity-report
 ```
+
+### Tier 2 backends
+
+```ini
+# DuckDB (in-process analytical SQL; no server)
+DATABASE_TARGET=duckdb
+DUCKDB_PATH=hkex.duckdb
+
+# MongoDB (document store)
+# DATABASE_TARGET=mongodb
+# MONGODB_URI=mongodb://localhost:27017
+# MONGODB_DATABASE=hkex
+
+# ClickHouse (columnar analytics)
+# DATABASE_TARGET=clickhouse
+# CLICKHOUSE_HOST=localhost  CLICKHOUSE_DATABASE=hkex  CLICKHOUSE_USER=default
+
+# Neo4j (graph)
+# DATABASE_TARGET=neo4j
+# NEO4J_URI=bolt://localhost:7687  NEO4J_USER=neo4j  NEO4J_PASSWORD=secret
+```
+
+See [docs/backends/README.md](docs/backends/README.md) for the capability matrix and per-engine
+notes. MongoDB (SSPL) and SurrealDB (BSL) are source-available, labelled exceptions.
 
 ## Usage
 
@@ -175,6 +205,10 @@ Configuration is loaded from `.env` in the **current working directory** (not th
 | `MYSQL_DSN` | — | Full MySQL DSN (preferred); `MARIADB_DSN` follows the same shape. |
 | `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_DATABASE` / `MYSQL_USER` / `MYSQL_PASSWORD` | — / `3306` / — | MySQL connection; `MARIADB_*` falls back to these. |
 | `SQLITE_PATH` | — | SQLite file path, or `:memory:`. |
+| `DUCKDB_PATH` | — | DuckDB file path, or `:memory:`. |
+| `MONGODB_URI` / `MONGODB_DATABASE` | — | MongoDB connection URI and database. |
+| `CLICKHOUSE_HOST` / `CLICKHOUSE_PORT` / `CLICKHOUSE_DATABASE` / `CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD` | — / `8123` / — | ClickHouse connection. |
+| `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` / `NEO4J_DATABASE` | — | Neo4j Bolt connection. |
 | `COMPANY_TABLE` | — | Company table; enables graph edges. |
 | `COMPANY_ID_PATTERN` | `{code}_{exchange}` | Ticker → company key pattern. |
 | `MAX_DOWNLOAD_WORKERS` | `15` | Parallel document downloads. |
@@ -223,6 +257,10 @@ See [docs/postgresql.md](docs/postgresql.md) for setup, queries, and troubleshoo
 - [PostgreSQL sink guide](docs/postgresql.md)
 - [MySQL/MariaDB sink guide](docs/backends/mysql.md)
 - [SQLite sink guide](docs/backends/sqlite.md)
+- [DuckDB sink guide](docs/backends/duckdb.md)
+- [MongoDB sink guide](docs/backends/mongodb.md)
+- [ClickHouse sink guide](docs/backends/clickhouse.md)
+- [Neo4j sink guide](docs/backends/neo4j.md)
 - [Configuration reference](docs/configuration.md)
 - [CLI reference](docs/cli.md)
 - [Architecture](docs/architecture.md)

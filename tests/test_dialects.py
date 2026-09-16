@@ -6,6 +6,7 @@ from hkex_scraper.sinks.dialects import (
     COVERAGE_COLUMNS,
     DOCUMENT_COLUMNS,
     FILING_COLUMNS,
+    DuckDBDialect,
     MySQLDialect,
     PostgresDialect,
     SQLiteDialect,
@@ -15,6 +16,7 @@ MYSQL = MySQLDialect()
 MARIADB = MySQLDialect("mariadb")
 SQLITE = SQLiteDialect()
 POSTGRES = PostgresDialect()
+DUCKDB = DuckDBDialect()
 
 
 class TestUpsertFilings:
@@ -125,3 +127,28 @@ class TestValueEncoding:
         assert MYSQL.encode({"a": 1}) == '{"a": 1}'
         stamp = datetime(2024, 7, 1, tzinfo=timezone.utc)
         assert MYSQL.encode(stamp) is stamp
+
+
+class TestDuckDB:
+    def test_upsert_uses_excluded_and_qmark(self):
+        sql = DUCKDB.upsert_filings_sql()
+        assert 'INSERT INTO "exchange_filing"' in sql
+        assert "ON CONFLICT" in sql and "EXCLUDED" in sql
+        assert sql.count("?") == len(FILING_COLUMNS)
+
+    def test_ddl_creates_tables_without_indexes(self):
+        joined = "\n".join(DUCKDB.ddl())
+        assert "CREATE INDEX" not in joined
+        for table in ("exchange_filing", "scrape_coverage", "has_filing", "references_filing"):
+            assert f'CREATE TABLE IF NOT EXISTS "{table}"' in joined
+        assert "JSON" in joined
+
+    def test_update_statements_return_rows_for_counting(self):
+        # DuckDB has no rowcount; the dialect appends RETURNING 1.
+        assert DUCKDB.upsert_document_sql().endswith("RETURNING 1")
+        assert DUCKDB.mark_status_sql().endswith("RETURNING 1")
+        assert DUCKDB.upsert_edge_sql("has_filing").endswith("RETURNING 1")
+
+    def test_edges_conflict_noop(self):
+        sql = DUCKDB.upsert_edge_sql("has_filing")
+        assert 'ON CONFLICT ("company_id", "filing_id") DO NOTHING' in sql

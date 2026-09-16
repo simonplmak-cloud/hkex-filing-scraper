@@ -25,10 +25,24 @@ SQLITE_PATH=hkex.db
 | `mysql` | relational | GPLv2 (Community) | Yes | `mysql` | `ON DUPLICATE KEY UPDATE` | Yes | Yes |
 | `mariadb` | relational | GPLv2 | Yes | `mysql` | `ON DUPLICATE KEY UPDATE` | Yes | Yes |
 | `sqlite` | relational | Public domain | Yes | — | `ON CONFLICT DO UPDATE` | Yes | Yes |
+| `duckdb` | relational | MIT | Yes | `duckdb` | `ON CONFLICT DO UPDATE` | Yes | Yes |
+| `mongodb` | document | SSPL | No | `mongodb` | `update_one(upsert=True)` | Yes | Yes |
+| `clickhouse` | columnar | Apache-2.0 | Yes | `clickhouse` | `ReplacingMergeTree` + read-merge | Yes | Yes |
+| `neo4j` | graph | GPLv3 (Community) | Yes | `neo4j` | `MERGE` | Yes | Yes |
 | `surrealdb` | graph + document | BSL 1.1 | No | — | `UPSERT` / `RELATE` | Yes | Yes |
 
 Source-available engines are labelled as such (see
 [ADR 0003](../adr/0003-sink-support-policy.md)).
+
+### Capability differences
+
+`SinkCapabilities` declares where engines differ, so the dispatcher adapts rather than assuming
+parity:
+
+- `clickhouse` declares `native_upsert=False` (no row upsert; read-merge-reinsert).
+- `mongodb`/`neo4j` are document/graph models; `postgres` declares `arrays=True` and
+  `json=True` (`text[]`, `jsonb`).
+- `duckdb` has no secondary indexes and no `rowcount` (uses `RETURNING`).
 
 ## Shared schema
 
@@ -49,6 +63,10 @@ existing row. Re-running is always idempotent.
 - [PostgreSQL](../postgresql.md)
 - [MySQL and MariaDB](mysql.md)
 - [SQLite](sqlite.md)
+- [DuckDB](duckdb.md)
+- [MongoDB](mongodb.md)
+- [ClickHouse](clickhouse.md)
+- [Neo4j](neo4j.md)
 - SurrealDB — see [Architecture](../architecture.md)
 
 ## Adding a backend

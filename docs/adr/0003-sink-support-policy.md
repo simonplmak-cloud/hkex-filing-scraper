@@ -20,7 +20,9 @@ databases are *source-available* rather than OSI-approved open source.
   engines are only accepted as clearly labelled exceptions.
 - Keep **one driver per engine, optional**. No driver may be promoted to a base dependency;
   the core stays `requests` + `beautifulsoup4`.
-- This feature (Tier 1) adds **MySQL/MariaDB** (`PyMySQL`) and **SQLite** (stdlib).
+- Tier 1 added **MySQL/MariaDB** (`PyMySQL`) and **SQLite** (stdlib). Tier 2 added
+  **DuckDB** (`duckdb`), **MongoDB** (`pymongo`), **ClickHouse** (`clickhouse-connect`), and
+  **Neo4j** (`neo4j`).
 
 ## Supported set
 
@@ -30,13 +32,15 @@ databases are *source-available* rather than OSI-approved open source.
 | `mysql` | GPLv2 (Community) | Yes | `mysql` |
 | `mariadb` | GPLv2 | Yes | `mysql` |
 | `sqlite` | Public domain | Yes | — |
+| `duckdb` | MIT | Yes | `duckdb` |
+| `clickhouse` | Apache-2.0 | Yes | `clickhouse` |
+| `neo4j` | GPLv3 (Community) | Yes | `neo4j` |
+| `mongodb` | SSPL | No — source-available (exception) | `mongodb` |
 | `surrealdb` | BSL 1.1 | No — source-available (exception) | — |
 
-Planned (Tier 2, not in this ADR's scope): `mongodb` (SSPL — source-available exception),
-`duckdb` (MIT), `clickhouse` (Apache-2.0), `neo4j` (GPLv3 Community).
-
 Explicitly out of scope: proprietary engines (SQL Server, Oracle, BigQuery, Snowflake,
-Redshift) and search/key-value/wide-column engines (OpenSearch, Cassandra, Valkey, TiDB).
+Redshift) and the remaining search/key-value/wide-column engines (OpenSearch, Cassandra,
+Valkey, TiDB).
 
 ## Alternatives considered
 

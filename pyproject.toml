@@ -37,6 +37,10 @@ pdf = ["PyMuPDF>=1.23", "pymupdf4llm>=0.0.17", "camelot-py[cv]>=0.11"]
 excel = ["openpyxl>=3.1"]
 postgres = ["psycopg[binary,pool]>=3.1"]
 mysql = ["PyMySQL>=1.1"]
+duckdb = ["duckdb>=1.0"]
+mongodb = ["pymongo>=4.6"]
+clickhouse = ["clickhouse-connect>=0.7"]
+neo4j = ["neo4j>=5.20"]
 all = [
     "PyMuPDF>=1.23",
     "pymupdf4llm>=0.0.17",
@@ -45,6 +49,10 @@ all = [
     "python-dotenv>=1.0",
     "psycopg[binary,pool]>=3.1",
     "PyMySQL>=1.1",
+    "duckdb>=1.0",
+    "pymongo>=4.6",
+    "clickhouse-connect>=0.7",
+    "neo4j>=5.20",
 ]
 dev = [
     "pytest>=7.0",
