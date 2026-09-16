@@ -14,6 +14,12 @@ You do not edit any files. The version number comes from the tag.
 
 Always start the tag with `v`. Use three numbers separated by dots.
 
+### Pre-release (test) versions
+
+For a release candidate or a test, add a suffix: `v1.2.0-rc1`, `v1.2.0-beta1`. These are
+marked as **pre-releases** on GitHub and never become the "Latest" release. Use one when
+you want to try the process without publishing a real version.
+
 ## Step 2 — Type two commands
 
 In the project folder, on the `main` branch, with your work already pushed:
@@ -48,13 +54,20 @@ Or download the `.whl` file from the Releases page and install that.
 ## If something goes wrong
 
 The **Actions** tab shows a red ❌. Click the failed step to read the error, fix it on
-`main`, and push. Then delete the tag and try again:
+`main`, and push. Then remove the release and the tag, and try again:
 
 ```bash
-git push origin --delete v1.2.0
+# Deletes the GitHub Release AND its tag in one command:
+gh release delete v1.2.0 --yes --cleanup-tag
+
+# If you also created the tag locally:
 git tag -d v1.2.0
 # fix the problem, push to main, then repeat Step 2
 ```
+
+> Deleting a tag on its own does **not** delete its GitHub Release — use
+> `gh release delete <tag> --yes --cleanup-tag` (or the "Delete" button on the
+> Releases page) to remove both.
 
 If the robot is badly broken and you need the files **right now**, there is a manual
 escape hatch: see [Release automation → Manual fallback](release-automation.md#manual-fallback).

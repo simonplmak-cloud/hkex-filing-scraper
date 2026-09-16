@@ -177,6 +177,8 @@ unblock.
 ## 11. Known limitations
 
 - **Not on PyPI.** Distribution is GitHub-only (tags and release assets).
+- **A tag push does not run `ci.yml`** (it triggers on `main`/PRs only). The release
+  workflow trusts the tagged commit, so tag from `main` after CI is green.
 - Release **notes are generated** from commits/PRs; edit them on the Release page if you
   want a curated write-up.
 - **Dual-write is forward-only.** Publishing a release does not migrate data between
