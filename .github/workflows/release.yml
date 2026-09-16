@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and attach assets to (e.g. v1.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # fetch-depth 0 gives hatch-vcs the tags and history it needs
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Building release for tag: $TAG"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      - name: Verify the wheel version matches the tag
+        env:
+          EXPECTED: ${{ steps.tag.outputs.version }}
+        run: |
+          python -c "import glob, os, zipfile; wheel = glob.glob('dist/*.whl')[0]; z = zipfile.ZipFile(wheel); meta = next(n for n in z.namelist() if n.endswith('METADATA')); version = next(l.split(': ', 1)[1].strip() for l in z.read(meta).decode().splitlines() if l.startswith('Version: ')); print('tag   ', os.environ['EXPECTED']); print('wheel ', version); assert version == os.environ['EXPECTED'], 'tag %s does not match wheel %s' % (os.environ['EXPECTED'], version)"
+
+      - name: Smoke test the wheel in a clean environment
+        env:
+          EXPECTED: ${{ steps.tag.outputs.version }}
+        run: |
+          python -m venv /tmp/verify
+          /tmp/verify/bin/pip install --quiet dist/*.whl
+          # --help works for every released version (including tags that predate --version)
+          /tmp/verify/bin/hkex-scraper --help >/dev/null
+          /tmp/verify/bin/python -c "import importlib.metadata as md, os, hkex_scraper; expected = os.environ['EXPECTED']; assert hkex_scraper.__version__ == expected, 'runtime %s != %s' % (hkex_scraper.__version__, expected); assert md.version('hkex-filing-scraper') == expected, 'distribution %s != %s' % (md.version('hkex-filing-scraper'), expected); print('runtime and distribution versions ok:', hkex_scraper.__version__)"
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum ./* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create or update the GitHub Release with assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          PRERELEASE_FLAG=""
+          case "$TAG" in
+            *-*) PRERELEASE_FLAG="--prerelease" ;;
+          esac
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists; uploading assets"
+            gh release upload "$TAG" dist/* --clobber
+          else
+            echo "Creating release $TAG"
+            gh release create "$TAG" dist/* \
+              --title "$TAG" \
+              --generate-notes \
+              $PRERELEASE_FLAG
+          fi
+          gh release view "$TAG" --json tagName,assets --jq '{tag: .tagName, assets: [.assets[].name]}'
