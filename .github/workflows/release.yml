@@ -25,6 +25,11 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Determine tag
         id: tag
         run: |
@@ -34,28 +39,39 @@ jobs:
             TAG="${GITHUB_REF_NAME}"
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "raw_version=${TAG#v}" >> "$GITHUB_OUTPUT"
           echo "Building release for tag: $TAG"
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Install build tooling
+        run: python -m pip install --upgrade build packaging
+
+      - name: Normalize version (PEP 440)
+        id: version
+        env:
+          RAW: ${{ steps.tag.outputs.raw_version }}
+        run: |
+          NORMALIZED=$(python -c "import os; from packaging.version import Version; print(str(Version(os.environ['RAW'])))")
+          if python -c "import os, sys; from packaging.version import Version; sys.exit(0 if Version(os.environ['RAW']).is_prerelease else 1)"; then
+            PRERELEASE="true"
+          else
+            PRERELEASE="false"
+          fi
+          echo "normalized=$NORMALIZED" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Tag version: $RAW -> $NORMALIZED (prerelease=$PRERELEASE)"
 
       - name: Build sdist and wheel
-        run: |
-          python -m pip install --upgrade build
-          python -m build
+        run: python -m build
 
       - name: Verify the wheel version matches the tag
         env:
-          EXPECTED: ${{ steps.tag.outputs.version }}
+          EXPECTED: ${{ steps.version.outputs.normalized }}
         run: |
           python -c "import glob, os, zipfile; wheel = glob.glob('dist/*.whl')[0]; z = zipfile.ZipFile(wheel); meta = next(n for n in z.namelist() if n.endswith('METADATA')); version = next(l.split(': ', 1)[1].strip() for l in z.read(meta).decode().splitlines() if l.startswith('Version: ')); print('tag   ', os.environ['EXPECTED']); print('wheel ', version); assert version == os.environ['EXPECTED'], 'tag %s does not match wheel %s' % (os.environ['EXPECTED'], version)"
 
       - name: Smoke test the wheel in a clean environment
         env:
-          EXPECTED: ${{ steps.tag.outputs.version }}
+          EXPECTED: ${{ steps.version.outputs.normalized }}
         run: |
           python -m venv /tmp/verify
           /tmp/verify/bin/pip install --quiet dist/*.whl
@@ -72,12 +88,13 @@ jobs:
       - name: Create or update the GitHub Release with assets
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
           PRERELEASE_FLAG=""
-          case "$TAG" in
-            *-*) PRERELEASE_FLAG="--prerelease" ;;
-          esac
+          if [ "$PRERELEASE" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG exists; uploading assets"
             gh release upload "$TAG" dist/* --clobber
@@ -88,4 +105,4 @@ jobs:
               --generate-notes \
               $PRERELEASE_FLAG
           fi
-          gh release view "$TAG" --json tagName,assets --jq '{tag: .tagName, assets: [.assets[].name]}'
+          gh release view "$TAG" --json tagName,isPrerelease,assets --jq '{tag: .tagName, prerelease: .isPrerelease, assets: [.assets[].name]}'
