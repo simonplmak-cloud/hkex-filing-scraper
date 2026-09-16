@@ -1,11 +1,14 @@
 # HKEx Filing Scraper
 
-![HKEx Filing Scraper — SurrealDB or PostgreSQL](docs/social_preview.png)
+![HKEx Filing Scraper — one scraper, many databases](docs/social_preview.png)
 
 [![CI](https://github.com/simonplmak-cloud/hkex-filing-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/simonplmak-cloud/hkex-filing-scraper/actions/workflows/ci.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/simonplmak-cloud/hkex-filing-scraper?color=green)](https://github.com/simonplmak-cloud/hkex-filing-scraper/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
+[![Docs](https://img.shields.io/badge/docs-simonplmak--cloud.github.io-blue)](https://simonplmak-cloud.github.io/hkex-filing-scraper/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![SurrealDB](https://img.shields.io/badge/SurrealDB-FF00A0?logo=surrealdb&logoColor=white)](https://surrealdb.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com)
@@ -17,11 +20,33 @@ An open-source Python tool that scrapes 25+ years of Hong Kong Stock Exchange (H
 
 It uses the undocumented HKEx JSON API directly, which is significantly faster and more reliable than browser-based scraping.
 
+## Contents
+
+- [Database support](#database-support) · [Why this project](#why-this-project) · [Features](#features) · [Installation](#installation) · [Quick start](#quick-start) · [Usage](#usage) · [Configuration](#configuration) · [Database schema](#database-schema) · [Documentation](#documentation) · [Development](#development) · [Roadmap](#roadmap) · [License](#license)
+
+## Database support
+
+Set `DATABASE_TARGET` to any ordered, comma-separated combination of these. The full matrix
+(licences, capability differences, per-engine notes) is in [docs/backends](docs/backends/README.md).
+
+| Sink | Model | Licence | Extra | Idempotent upsert |
+| ---- | ----- | ------- | ----- | ----------------- |
+| `postgres` | relational | PostgreSQL License | `postgres` | `ON CONFLICT DO UPDATE` |
+| `mysql` / `mariadb` | relational | GPLv2 | `mysql` | `ON DUPLICATE KEY UPDATE` |
+| `sqlite` | relational | Public domain | — | `ON CONFLICT DO UPDATE` |
+| `duckdb` | relational | MIT | `duckdb` | `ON CONFLICT DO UPDATE` |
+| `mongodb` | document | SSPL¹ | `mongodb` | `update_one(upsert=True)` |
+| `clickhouse` | columnar | Apache-2.0 | `clickhouse` | `ReplacingMergeTree` + read-merge |
+| `neo4j` | graph | GPLv3 (Community) | `neo4j` | `MERGE` |
+| `surrealdb` | graph + document | BSL 1.1¹ | — | `UPSERT` / `RELATE` |
+
+¹ Source-available, not OSI-approved — labelled exceptions per [ADR 0003](docs/adr/0003-sink-support-policy.md).
+
 ## Why this project
 
 Regulatory filings are the raw substrate for research, compliance, and LLM/RAG systems, but getting a complete, faithful, provenance-preserving copy is tedious: you have to reverse-engineer the HKEx API, handle a JSF session and pagination, parse Chinese/English bilingual PDFs, extract tables, and survive payload limits and database quirks. This tool does all of that and hands you a clean corpus.
 
-The **multi-sink** design means you don't have to adopt a new database to use it: keep the graph-native SurrealDB model, or mirror everything into PostgreSQL, MySQL/MariaDB, or SQLite so existing SQL/BI/dbt tooling can query it. Set one variable (`DATABASE_TARGET`) and the same run feeds one or several sinks.
+The **multi-sink** design means you don't have to adopt a new database to use it: keep the graph-native SurrealDB/Neo4j model, mirror everything into PostgreSQL/MySQL/SQLite/DuckDB for SQL/BI/dbt tooling, stream documents into MongoDB, or load ClickHouse for analytics. Set one variable (`DATABASE_TARGET`) and the same run feeds one or several sinks.
 
 ## Features
 
@@ -32,7 +57,7 @@ The **multi-sink** design means you don't have to adopt a new database to use it
 - **Graph linking** — optional `(company)-[has_filing]->(filing)` and `(filing)-[references_filing]->(company)` edges, natively on SurrealDB and Neo4j.
 - **Resilient & parallel** — batching, parallel downloads, recursive retries, stalled-job detection.
 - **Failure isolation** — a failure on one sink never blocks or rolls back another; per-sink counters are reported every run, and the run exits non-zero if any configured sink failed.
-- **Optional dependencies** — core is `requests` + `beautifulsoup4`; PDF/Excel extraction and the PostgreSQL/MySQL drivers are extras with graceful fallback. SQLite needs no extra.
+- **Optional dependencies** — core is `requests` + `beautifulsoup4`; PDF/Excel extraction and every database driver (`psycopg`, `PyMySQL`, `duckdb`, `pymongo`, `clickhouse-connect`, `neo4j`) are extras with graceful fallback. SQLite needs no extra.
 
 ## Installation
 
@@ -180,7 +205,7 @@ hkex-scraper --database-target postgres,sqlite --parity-report
 | `--backfill-docs` | Phase 2 only: download documents for existing filings. |
 | `--link-only` | Only create/refresh graph edges. |
 | `--dry-run` | Fetch but do not write to any database. |
-| `--database-target SINKS` | Override `DATABASE_TARGET` (comma-separated; valid: `postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb`). |
+| `--database-target SINKS` | Override `DATABASE_TARGET` (comma-separated; valid: `postgres`, `mysql`, `mariadb`, `sqlite`, `duckdb`, `mongodb`, `clickhouse`, `neo4j`, `surrealdb`). |
 | `--coverage-report` | Print chunk coverage from the read source, then exit. |
 | `--parity-report` | Print filing counts per sink and the spread, then exit. |
 | `--version` | Print the version and exit. |
@@ -193,7 +218,7 @@ Configuration is loaded from `.env` in the **current working directory** (not th
 
 | Variable | Default | Purpose |
 | -------- | ------- | ------- |
-| `DATABASE_TARGET` | **required** | Comma-separated, ordered sink list: `postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb`. |
+| `DATABASE_TARGET` | **required** | Comma-separated, ordered sink list: `postgres`, `mysql`, `mariadb`, `sqlite`, `duckdb`, `mongodb`, `clickhouse`, `neo4j`, `surrealdb`. |
 | `SURREAL_ENDPOINT` | — | SurrealDB HTTP endpoint (required when target includes surrealdb). |
 | `SURREAL_NAMESPACE` / `SURREAL_DATABASE` | `default` | SurrealDB NS/DB. |
 | `SURREAL_USERNAME` / `SURREAL_PASSWORD` | `root` / — | SurrealDB credentials. |
@@ -219,21 +244,28 @@ Configuration is loaded from `.env` in the **current working directory** (not th
 
 `exchange_filing` is `SCHEMAFULL` and holds filing metadata plus the document payload (`documentText`, `documentTables`, `documentStatus`, …). Graph linking adds the `has_filing` and `references_filing` edge tables, and `scrape_coverage` records per-chunk completeness. See [docs/architecture.md](docs/architecture.md).
 
-### Relational sinks (PostgreSQL, MySQL/MariaDB, SQLite)
+### Relational sinks (PostgreSQL, MySQL/MariaDB, SQLite, DuckDB)
 
 When `DATABASE_TARGET` includes a relational sink, the scraper mirrors the same records into
 it. The schema is created automatically with idempotent DDL. Per-engine guides:
 [PostgreSQL](docs/postgresql.md), [MySQL/MariaDB](docs/backends/mysql.md),
-[SQLite](docs/backends/sqlite.md).
+[SQLite](docs/backends/sqlite.md), [DuckDB](docs/backends/duckdb.md).
 
 | Table | Purpose |
 | ----- | ------- |
-| `exchange_filing` | Filing metadata + document payload. `filing_id` (MD5-16) is the primary key and the shared join key with SurrealDB. `document_tables` is `jsonb`; `referenced_tickers` is `text[]`. |
+| `exchange_filing` | Filing metadata + document payload. `filing_id` (MD5-16) is the primary key and the shared join key across sinks. `document_tables` is `jsonb` on PostgreSQL and JSON elsewhere; `referenced_tickers` is `text[]` on PostgreSQL and JSON elsewhere. |
 | `scrape_coverage` | One row per processed chunk, unique on `(chunk_from, chunk_to, run_id)`. |
 | `has_filing` | Company → filing edges, primary key `(company_id, filing_id)`. |
 | `references_filing` | Filing → referenced-company edges, primary key `(filing_id, company_id)`. |
 
 Writes are parameterised `INSERT ... ON CONFLICT DO UPDATE` statements, so re-running is idempotent. Document payloads use a separate `UPDATE`, so a metadata-only re-run never overwrites extracted text or tables.
+
+### Document, columnar, and graph sinks
+
+- **MongoDB** — one document per filing in `exchange_filing` (`_id = filing_id`), plus `scrape_coverage` and the two edge collections. See [docs/backends/mongodb.md](docs/backends/mongodb.md).
+- **ClickHouse** — `ReplacingMergeTree` tables read with `FINAL`; metadata/document writes merge with the existing row (no native upsert). See [docs/backends/clickhouse.md](docs/backends/clickhouse.md).
+- **Neo4j** — `(:Company)-[:HAS_FILING]->(:Filing)` and `(:Filing)-[:REFERENCES_FILING]->(:Company)`, all writes via `MERGE`. See [docs/backends/neo4j.md](docs/backends/neo4j.md).
+- **SurrealDB** — `SCHEMAFULL` `exchange_filing` plus `RELATE` edges and the `scrape_coverage` table. See [docs/architecture.md](docs/architecture.md).
 
 ```sql
 -- PostgreSQL examples
@@ -253,6 +285,7 @@ See [docs/postgresql.md](docs/postgresql.md) for setup, queries, and troubleshoo
 ## Documentation
 
 - [Getting started](docs/getting-started.md)
+- **Docs site:** <https://simonplmak-cloud.github.io/hkex-filing-scraper/>
 - [Database backends (support matrix)](docs/backends/README.md)
 - [PostgreSQL sink guide](docs/postgresql.md)
 - [MySQL/MariaDB sink guide](docs/backends/mysql.md)
@@ -261,11 +294,14 @@ See [docs/postgresql.md](docs/postgresql.md) for setup, queries, and troubleshoo
 - [MongoDB sink guide](docs/backends/mongodb.md)
 - [ClickHouse sink guide](docs/backends/clickhouse.md)
 - [Neo4j sink guide](docs/backends/neo4j.md)
+- [Try it locally (`examples/`)](examples/README.md)
 - [Configuration reference](docs/configuration.md)
 - [CLI reference](docs/cli.md)
 - [Architecture](docs/architecture.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Testing](docs/testing.md)
+- [De-risking register](docs/de-risking.md)
+- [Legal & Terms of Use](docs/legal.md)
 - [Upgrading](docs/upgrading.md)
 - [Releasing](docs/releasing.md)
 - [Release automation reference](docs/release-automation.md)
@@ -285,7 +321,21 @@ Tests are pure unit tests. SQLite contract tests run in-process on every `pytest
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Please report security issues per [SECURITY.md](SECURITY.md).
+Ideas and questions are welcome in [Discussions](https://github.com/simonplmak-cloud/hkex-filing-scraper/discussions).
+
+If this saves you time, a ⭐ helps others find it.
+
+## Roadmap
+
+- ✅ Multi-sink architecture — PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, ClickHouse, Neo4j, SurrealDB.
+- ⏭️ Hardening — recorded HKEx API fixtures + canary, `--verify` cross-sink reconciliation, fault-injection tests, SBOM/provenance (see [docs/de-risking.md](docs/de-risking.md)).
+- 💡 Considered — OpenSearch, Cassandra, Valkey, TiDB (see [ADR 0003](docs/adr/0003-sink-support-policy.md)).
+
+Contributions that fit the roadmap, and `good first issue` items, are especially welcome.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Commercial redistribution of HKEx data may require a licensed HKEx feed; see the project notes on Terms of Use.
+MIT — see [LICENSE](LICENSE).
+
+**Data & Terms of Use:** this is a research tool for the undocumented HKEx JSON API. Commercial
+redistribution of HKEx data may require a licensed HKEx feed; see [docs/legal.md](docs/legal.md).

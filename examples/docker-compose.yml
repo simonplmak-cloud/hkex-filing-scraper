@@ -1,0 +1,74 @@
+# Local database stack for trying every HKEx Filing Scraper sink.
+#
+#   cd examples
+#   docker compose up -d
+#   ../.venv/bin/hkex-scraper --database-target sqlite --limit 50   # or any sink below
+#
+# Every service is a development container with throwaway credentials. Do not
+# use these settings in production.
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: hkex
+      POSTGRES_PASSWORD: hkex
+      POSTGRES_DB: hkex
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hkex"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: hkex
+      MYSQL_USER: hkex
+      MYSQL_PASSWORD: hkex
+    ports: ["3306:3306"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: hkex
+      MARIADB_USER: hkex
+      MARIADB_PASSWORD: hkex
+    ports: ["3307:3306"]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongodb:
+    image: mongo:7
+    ports: ["27017:27017"]
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    environment:
+      CLICKHOUSE_DB: hkex
+      CLICKHOUSE_USER: hkex
+      CLICKHOUSE_PASSWORD: hkex
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports: ["8123:8123", "9000:9000"]
+
+  neo4j:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: neo4j/hkexpassword
+    ports: ["7474:7474", "7687:7687"]
+
+  surrealdb:
+    image: surrealdb/surrealdb:v3.2.4
+    command: ["start", "--log", "warn", "--user", "root", "--pass", "root", "--bind", "0.0.0.0:8000", "memory"]
+    ports: ["8000:8000"]

@@ -31,8 +31,13 @@ body:
       options:
         - Scraping / API
         - Document extraction
-        - SurrealDB sink
         - PostgreSQL sink
+        - MySQL / MariaDB sink
+        - SQLite / DuckDB sink
+        - MongoDB sink
+        - ClickHouse sink
+        - Neo4j sink
+        - SurrealDB sink
         - Graph linking
         - CLI / configuration
         - Documentation

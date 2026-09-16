@@ -30,9 +30,16 @@ body:
     attributes:
       label: Database target
       options:
-        - surrealdb
         - postgres
-        - both
+        - mysql
+        - mariadb
+        - sqlite
+        - duckdb
+        - mongodb
+        - clickhouse
+        - neo4j
+        - surrealdb
+        - multiple / other
     validations:
       required: true
   - type: input

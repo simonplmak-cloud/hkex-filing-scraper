@@ -3,24 +3,28 @@
 ## Requirements
 
 - Python 3.10+
-- One or both of:
-  - a SurrealDB instance (default sink)
-  - a PostgreSQL 13+ instance (optional sink)
+- At least one supported database to write into:
+  - a relational server — PostgreSQL 13+, MySQL 8, or MariaDB 10.5+
+  - a filesystem database — SQLite or DuckDB (no server required)
+  - a document/graph/columnar server — MongoDB 6+, ClickHouse 24+, Neo4j 5, or SurrealDB
 - A `.env` file placed in the **current working directory** (the scraper loads `Path.cwd()/.env`, not the repo root).
+
+See [Database backends](backends/README.md) for the support matrix, licences, and capability differences.
 
 ## Install
 
 ```bash
 git clone https://github.com/simonplmak-cloud/hkex-filing-scraper.git
 cd hkex-filing-scraper
-pip install ".[all]"      # PDF/Excel extraction + dotenv + PostgreSQL driver
+pip install ".[all]"      # PDF/Excel extraction + dotenv + every database driver
 ```
 
 Minimal installs:
 
 ```bash
-pip install .              # metadata + HTML only, SurrealDB only
-pip install ".[postgres]"  # add the PostgreSQL driver
+pip install .              # metadata + HTML only; SQLite works out of the box
+pip install ".[postgres]"  # add one driver at a time
+pip install ".[duckdb]"    # or: mysql, mongodb, clickhouse, neo4j
 ```
 
 ## Configure
@@ -65,6 +69,30 @@ POSTGRES_DSN=postgresql://user:password@localhost:5432/hkex
 SQLITE_PATH=hkex.db
 ```
 
+### Other backends
+
+```ini
+# MySQL / MariaDB
+DATABASE_TARGET=mysql
+MYSQL_HOST=localhost  MYSQL_DATABASE=hkex  MYSQL_USER=hkex  MYSQL_PASSWORD=secret
+
+# DuckDB (no server)
+DATABASE_TARGET=duckdb
+DUCKDB_PATH=hkex.duckdb
+
+# MongoDB
+DATABASE_TARGET=mongodb
+MONGODB_URI=mongodb://localhost:27017  MONGODB_DATABASE=hkex
+
+# ClickHouse
+DATABASE_TARGET=clickhouse
+CLICKHOUSE_HOST=localhost  CLICKHOUSE_DATABASE=hkex  CLICKHOUSE_USER=default
+
+# Neo4j
+DATABASE_TARGET=neo4j
+NEO4J_URI=bolt://localhost:7687  NEO4J_USER=neo4j  NEO4J_PASSWORD=secret
+```
+
 `DATABASE_TARGET` is required — there is no implicit default. See
 [Database backends](backends/README.md) for the full support matrix.
 
@@ -78,19 +106,20 @@ hkex-scraper --metadata-only --limit 100
 hkex-scraper --full-history
 ```
 
-The schema (SurrealDB and/or PostgreSQL) is created automatically on startup using idempotent DDL.
+The schema for every configured sink is created automatically on startup using idempotent DDL.
 
 ## Verify
 
 ```bash
-hkex-scraper --coverage-report                       # chunk-level coverage
-hkex-scraper --database-target both --parity-report  # per-sink filing counts
+hkex-scraper --coverage-report                          # chunk-level coverage
+hkex-scraper --database-target postgres,sqlite --parity-report  # per-sink filing counts
 ```
 
-Exit code is non-zero if a **required** sink recorded write failures.
+Exit code is non-zero if **any** configured sink recorded write failures.
 
 ## Next steps
 
+- [Database backends (support matrix)](backends/README.md)
 - [PostgreSQL sink guide](postgresql.md)
 - [Configuration reference](configuration.md)
 - [CLI reference](cli.md)
