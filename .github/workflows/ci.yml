@@ -67,3 +67,74 @@ jobs:
           DATABASE_TARGET: postgres
           POSTGRES_DSN: postgresql://hkex:hkex@localhost:5432/hkex
         run: pytest -q tests/test_postgres_integration.py
+
+  integration-surrealdb:
+    name: SurrealDB integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Start SurrealDB
+        run: |
+          docker run -d --name surrealdb -p 8000:8000 \
+            surrealdb/surrealdb:v3.2.4 start --log warn --user root --pass root --bind 0.0.0.0:8000 memory
+          for _ in $(seq 1 30); do curl -sf http://localhost:8000/health && break; sleep 1; done
+      - name: Integration tests
+        env:
+          DATABASE_TARGET: surrealdb
+          SURREAL_ENDPOINT: http://localhost:8000
+          SURREAL_NAMESPACE: test
+          SURREAL_DATABASE: hkex
+          SURREAL_USERNAME: root
+          SURREAL_PASSWORD: root
+          COMPANY_TABLE: company
+        run: pytest -q tests/test_surrealdb_integration.py
+
+  integration-dual-write:
+    name: Dual-write integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: hkex
+          POSTGRES_PASSWORD: hkex
+          POSTGRES_DB: hkex
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev,postgres]"
+      - name: Start SurrealDB
+        run: |
+          docker run -d --name surrealdb -p 8000:8000 \
+            surrealdb/surrealdb:v3.2.4 start --log warn --user root --pass root --bind 0.0.0.0:8000 memory
+          for _ in $(seq 1 30); do curl -sf http://localhost:8000/health && break; sleep 1; done
+      - name: Integration tests (both sinks)
+        env:
+          DATABASE_TARGET: both
+          SURREAL_ENDPOINT: http://localhost:8000
+          SURREAL_NAMESPACE: test
+          SURREAL_DATABASE: hkex
+          SURREAL_USERNAME: root
+          SURREAL_PASSWORD: root
+          POSTGRES_DSN: postgresql://hkex:hkex@localhost:5432/hkex
+          COMPANY_TABLE: company
+        run: |
+          pytest -q \
+            tests/test_postgres_integration.py \
+            tests/test_surrealdb_integration.py \
+            tests/test_dual_write_integration.py
