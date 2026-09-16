@@ -1,6 +1,6 @@
 # PostgreSQL Sink Guide
 
-The scraper can mirror every record it persists into PostgreSQL, either as an alternative to SurrealDB or alongside it (dual-write).
+The scraper can mirror every record it persists into PostgreSQL, either as the only sink or alongside others (multi-write).
 
 ## Enable it
 
@@ -13,7 +13,7 @@ The scraper can mirror every record it persists into PostgreSQL, either as an al
 2. Select the sink in `.env`:
 
    ```ini
-   DATABASE_TARGET=postgres          # or "both"
+   DATABASE_TARGET=postgres          # or a list, e.g. postgres,sqlite
    POSTGRES_DSN=postgresql://user:password@localhost:5432/hkex
    ```
 
@@ -87,17 +87,17 @@ ORDER BY chunk_from DESC;
 
 ## Operational notes
 
-- **Failure isolation.** A PostgreSQL failure never aborts or rolls back the SurrealDB write (and vice versa). Per-sink success/failure counts are printed at the end of every run.
-- **Graceful degradation.** If the driver is not installed or no connection details are configured, the scraper logs a warning and continues with the other sink. If PostgreSQL is the *only* configured sink and is unusable, the run fails fast with an actionable error.
-- **Read routing.** With `DATABASE_TARGET=postgres`, Phase 2 pending-filing selection and graph ticker enumeration read from PostgreSQL rather than SurrealDB.
+- **Failure isolation.** A PostgreSQL failure never aborts or rolls back the writes to other sinks (and vice versa). Per-sink success/failure counts are printed at the end of every run.
+- **Every configured sink is required.** If PostgreSQL is configured and unusable (driver or connection details missing), the run fails fast with an actionable error rather than appearing to succeed.
+- **Read routing.** Reads (pending filings, distinct tickers, titles, coverage) come from the first configured sink that supports them — put `postgres` first in `DATABASE_TARGET` to read from PostgreSQL.
 - **Credentials.** The DSN is never logged; `db_postgres` redacts `password=` and URL credentials from error text.
-- **Edges.** Graph edges are only written when `COMPANY_TABLE` is configured. In dual mode an edge is created only for tickers matched in the SurrealDB company table; in PostgreSQL-only mode all tickers produce edges.
+- **Edges.** Graph edges are only written when `COMPANY_TABLE` is configured. The SurrealDB sink creates an edge only for tickers matched in its company table; the relational sinks create edges for every ticker.
 - **Pooling.** `POSTGRES_MIN_POOL` / `POSTGRES_MAX_POOL` size the connection pool (defaults 1 / 15).
 
 ## Parity
 
 ```bash
-hkex-scraper --database-target both --parity-report
+hkex-scraper --database-target postgres,sqlite --parity-report
 ```
 
 Prints SurrealDB and PostgreSQL filing counts and the difference (`Parity: OK` on zero). When only one sink is enabled, parity is reported as `N/A`.

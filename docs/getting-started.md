@@ -29,7 +29,23 @@ pip install ".[postgres]"  # add the PostgreSQL driver
 cp .env.example .env
 ```
 
-### SurrealDB (default)
+### PostgreSQL (recommended)
+
+```ini
+DATABASE_TARGET=postgres
+POSTGRES_DSN=postgresql://user:password@localhost:5432/hkex
+```
+
+Or use the discrete `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_DATABASE` / `POSTGRES_USER` / `POSTGRES_PASSWORD` variables instead of `POSTGRES_DSN`.
+
+### SQLite (no server required)
+
+```ini
+DATABASE_TARGET=sqlite
+SQLITE_PATH=hkex.db
+```
+
+### SurrealDB
 
 ```ini
 DATABASE_TARGET=surrealdb
@@ -40,23 +56,17 @@ SURREAL_USERNAME=root
 SURREAL_PASSWORD=your_password
 ```
 
-### PostgreSQL
+### Multiple sinks
 
 ```ini
-DATABASE_TARGET=postgres
+# Order matters: reads come from the first read-capable sink.
+DATABASE_TARGET=postgres,sqlite
 POSTGRES_DSN=postgresql://user:password@localhost:5432/hkex
+SQLITE_PATH=hkex.db
 ```
 
-Or use the discrete `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_DATABASE` / `POSTGRES_USER` / `POSTGRES_PASSWORD` variables instead of `POSTGRES_DSN`.
-
-### Both
-
-```ini
-DATABASE_TARGET=both
-SURREAL_ENDPOINT=http://localhost:8000
-SURREAL_PASSWORD=your_password
-POSTGRES_DSN=postgresql://user:password@localhost:5432/hkex
-```
+`DATABASE_TARGET` is required — there is no implicit default. See
+[Database backends](backends/README.md) for the full support matrix.
 
 ## First run
 

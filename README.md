@@ -8,8 +8,10 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![SurrealDB](https://img.shields.io/badge/SurrealDB-FF00A0?logo=surrealdb&logoColor=white)](https://surrealdb.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com)
+[![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)](https://sqlite.org)
 
-An open-source Python tool that scrapes 25+ years of Hong Kong Stock Exchange (HKEx) regulatory filings and ingests them into **SurrealDB, PostgreSQL, or both** — with full-text extraction from PDF/HTML/Excel documents, structured tables, coverage tracking, and optional graph linking.
+An open-source Python tool that scrapes 25+ years of Hong Kong Stock Exchange (HKEx) regulatory filings and ingests them into **any combination of PostgreSQL, MySQL/MariaDB, SQLite, and SurrealDB** — with full-text extraction from PDF/HTML/Excel documents, structured tables, coverage tracking, and optional graph linking.
 
 It uses the undocumented HKEx JSON API directly, which is significantly faster and more reliable than browser-based scraping.
 
@@ -17,18 +19,18 @@ It uses the undocumented HKEx JSON API directly, which is significantly faster a
 
 Regulatory filings are the raw substrate for research, compliance, and LLM/RAG systems, but getting a complete, faithful, provenance-preserving copy is tedious: you have to reverse-engineer the HKEx API, handle a JSF session and pagination, parse Chinese/English bilingual PDFs, extract tables, and survive payload limits and database quirks. This tool does all of that and hands you a clean corpus.
 
-The **dual-store** design means you don't have to adopt a new database to use it: keep the graph-native SurrealDB model, or mirror everything into PostgreSQL so existing SQL/BI/dbt tooling can query it. Set one variable (`DATABASE_TARGET`) and the same run feeds either or both.
+The **multi-sink** design means you don't have to adopt a new database to use it: keep the graph-native SurrealDB model, or mirror everything into PostgreSQL, MySQL/MariaDB, or SQLite so existing SQL/BI/dbt tooling can query it. Set one variable (`DATABASE_TARGET`) and the same run feeds one or several sinks.
 
 ## Features
 
 - **Fast API scraping** — direct HKEx JSON API, no browser/Selenium.
 - **Full history** — every filing from April 1999 to today, with chunk-level coverage verification.
 - **Document processing** — downloads PDF/HTML/Excel and extracts full text plus structured tables (Markdown).
-- **Dual sink** — `DATABASE_TARGET=surrealdb` (default), `postgres`, or `both`. PostgreSQL mirrors filings, documents, coverage, and edges with idempotent `ON CONFLICT` upserts; `document_tables` is stored as `jsonb`.
+- **Multi-sink** — write to any combination of PostgreSQL, MySQL/MariaDB, SQLite, and SurrealDB via `DATABASE_TARGET` (an ordered, comma-separated list). Relational sinks mirror filings, documents, coverage, and edges with idempotent upserts; `document_tables` is `jsonb` on PostgreSQL and JSON elsewhere.
 - **Graph linking** (SurrealDB) — optional `(company)-[has_filing]->(filing)` and `(filing)-[references_filing]->(company)` edges.
 - **Resilient & parallel** — batching, parallel downloads, recursive retries, stalled-job detection.
-- **Failure isolation** — a failure on one sink never blocks or rolls back the other; per-sink counters are reported every run.
-- **Optional dependencies** — core is `requests` + `beautifulsoup4`; PDF/Excel extraction and the PostgreSQL driver are extras with graceful fallback.
+- **Failure isolation** — a failure on one sink never blocks or rolls back another; per-sink counters are reported every run, and the run exits non-zero if any configured sink failed.
+- **Optional dependencies** — core is `requests` + `beautifulsoup4`; PDF/Excel extraction and the PostgreSQL/MySQL drivers are extras with graceful fallback. SQLite needs no extra.
 
 ## Installation
 
@@ -38,49 +40,71 @@ The package is distributed via GitHub (not PyPI):
 git clone https://github.com/simonplmak-cloud/hkex-filing-scraper.git
 cd hkex-filing-scraper
 
-# Recommended: PDF/Excel extraction + dotenv + PostgreSQL driver
+# Recommended: PDF/Excel extraction + dotenv + PostgreSQL + MySQL drivers
 pip install ".[all]"
 
-# Minimal (metadata + HTML only, SurrealDB only)
+# Minimal (metadata + HTML only, SQLite or SurrealDB)
 pip install .
 
 # Add only the PostgreSQL sink driver
 pip install ".[postgres]"
+
+# Add only the MySQL/MariaDB sink driver
+pip install ".[mysql]"
 ```
 
-Optional extras: `pdf`, `excel`, `postgres`, `all`, `dev`.
+Optional extras: `pdf`, `excel`, `postgres`, `mysql`, `all`, `dev`. SQLite needs no extra.
 
 ## Quick start
 
-### SurrealDB (default)
-
-```bash
-cp .env.example .env
-# edit .env with your SURREAL_* settings
-hkex-scraper --metadata-only          # fast: metadata only
-hkex-scraper                          # full: metadata + documents + graph
-```
-
-### PostgreSQL only
+### PostgreSQL (recommended default)
 
 ```bash
 cp .env.example .env
 # .env:
 #   DATABASE_TARGET=postgres
 #   POSTGRES_DSN=postgresql://user:password@localhost:5432/hkex
+hkex-scraper --metadata-only          # fast: metadata only
+hkex-scraper                          # full: metadata + documents + graph
+```
+
+### SQLite (no server required)
+
+```bash
+# .env:
+#   DATABASE_TARGET=sqlite
+#   SQLITE_PATH=hkex.db
+hkex-scraper
+```
+
+### SurrealDB
+
+```bash
+# .env:
+#   DATABASE_TARGET=surrealdb
+#   SURREAL_ENDPOINT=http://localhost:8000
+#   SURREAL_PASSWORD=root
 hkex-scraper
 ```
 
 The schema is created automatically on startup — no manual DDL.
 
-### Both (dual-write)
+### MySQL / MariaDB
 
 ```bash
 # .env:
-#   DATABASE_TARGET=both
-#   SURREAL_ENDPOINT=...  SURREAL_PASSWORD=...
-#   POSTGRES_DSN=postgresql://user:password@localhost:5432/hkex
-hkex-scraper --database-target both --parity-report
+#   DATABASE_TARGET=mysql
+#   MYSQL_HOST=localhost  MYSQL_DATABASE=hkex  MYSQL_USER=hkex  MYSQL_PASSWORD=secret
+hkex-scraper
+```
+
+### Multiple sinks (order sets read precedence)
+
+```bash
+# .env:
+#   DATABASE_TARGET=postgres,sqlite,surrealdb
+#   ... connection settings for each ...
+hkex-scraper --parity-report
 ```
 
 ## Usage
@@ -104,13 +128,14 @@ hkex-scraper --link-only
 hkex-scraper --limit 500
 hkex-scraper --dry-run
 
-# Choose the sink for this run
+# Choose the sink(s) for this run (comma-separated, ordered)
 hkex-scraper --database-target postgres
-hkex-scraper --database-target both
+hkex-scraper --database-target sqlite
+hkex-scraper --database-target postgres,sqlite
 
 # Reporting
 hkex-scraper --coverage-report
-hkex-scraper --database-target both --parity-report
+hkex-scraper --database-target postgres,sqlite --parity-report
 ```
 
 ### Command-line options
@@ -125,12 +150,12 @@ hkex-scraper --database-target both --parity-report
 | `--backfill-docs` | Phase 2 only: download documents for existing filings. |
 | `--link-only` | Only create/refresh graph edges. |
 | `--dry-run` | Fetch but do not write to any database. |
-| `--database-target TARGET` | Override `DATABASE_TARGET` (`surrealdb` \| `postgres` \| `both`). |
-| `--coverage-report` | Print chunk coverage from the active sink, then exit. |
-| `--parity-report` | Print filing counts per sink and the difference, then exit. |
+| `--database-target SINKS` | Override `DATABASE_TARGET` (comma-separated; valid: `postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb`). |
+| `--coverage-report` | Print chunk coverage from the read source, then exit. |
+| `--parity-report` | Print filing counts per sink and the spread, then exit. |
 | `--version` | Print the version and exit. |
 
-Exit code is non-zero when a **required** sink recorded write failures (SurrealDB when enabled; PostgreSQL when it is the only sink).
+Exit code is non-zero when **any** configured sink recorded write failures.
 
 ## Configuration
 
@@ -138,7 +163,7 @@ Configuration is loaded from `.env` in the **current working directory** (not th
 
 | Variable | Default | Purpose |
 | -------- | ------- | ------- |
-| `DATABASE_TARGET` | `surrealdb` | `surrealdb`, `postgres`, or `both`. |
+| `DATABASE_TARGET` | **required** | Comma-separated, ordered sink list: `postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb`. |
 | `SURREAL_ENDPOINT` | — | SurrealDB HTTP endpoint (required when target includes surrealdb). |
 | `SURREAL_NAMESPACE` / `SURREAL_DATABASE` | `default` | SurrealDB NS/DB. |
 | `SURREAL_USERNAME` / `SURREAL_PASSWORD` | `root` / — | SurrealDB credentials. |
@@ -147,8 +172,11 @@ Configuration is loaded from `.env` in the **current working directory** (not th
 | `POSTGRES_DATABASE` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | — | Discrete connection. |
 | `POSTGRES_SCHEMA` | `public` | Schema for the mirrored tables. |
 | `POSTGRES_MIN_POOL` / `POSTGRES_MAX_POOL` | `1` / `15` | Connection pool sizing. |
-| `COMPANY_TABLE` | — | SurrealDB company table; enables graph edges. |
-| `COMPANY_ID_PATTERN` | `{code}_{exchange}` | Ticker → company record ID pattern. |
+| `MYSQL_DSN` | — | Full MySQL DSN (preferred); `MARIADB_DSN` follows the same shape. |
+| `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_DATABASE` / `MYSQL_USER` / `MYSQL_PASSWORD` | — / `3306` / — | MySQL connection; `MARIADB_*` falls back to these. |
+| `SQLITE_PATH` | — | SQLite file path, or `:memory:`. |
+| `COMPANY_TABLE` | — | Company table; enables graph edges. |
+| `COMPANY_ID_PATTERN` | `{code}_{exchange}` | Ticker → company key pattern. |
 | `MAX_DOWNLOAD_WORKERS` | `15` | Parallel document downloads. |
 
 ## Database schema
@@ -157,9 +185,12 @@ Configuration is loaded from `.env` in the **current working directory** (not th
 
 `exchange_filing` is `SCHEMAFULL` and holds filing metadata plus the document payload (`documentText`, `documentTables`, `documentStatus`, …). Graph linking adds the `has_filing` and `references_filing` edge tables, and `scrape_coverage` records per-chunk completeness. See [docs/architecture.md](docs/architecture.md).
 
-### PostgreSQL
+### Relational sinks (PostgreSQL, MySQL/MariaDB, SQLite)
 
-When `DATABASE_TARGET` includes `postgres`, the scraper mirrors the same records into PostgreSQL. The schema is created automatically with idempotent DDL.
+When `DATABASE_TARGET` includes a relational sink, the scraper mirrors the same records into
+it. The schema is created automatically with idempotent DDL. Per-engine guides:
+[PostgreSQL](docs/postgresql.md), [MySQL/MariaDB](docs/backends/mysql.md),
+[SQLite](docs/backends/sqlite.md).
 
 | Table | Purpose |
 | ----- | ------- |
@@ -188,7 +219,10 @@ See [docs/postgresql.md](docs/postgresql.md) for setup, queries, and troubleshoo
 ## Documentation
 
 - [Getting started](docs/getting-started.md)
+- [Database backends (support matrix)](docs/backends/README.md)
 - [PostgreSQL sink guide](docs/postgresql.md)
+- [MySQL/MariaDB sink guide](docs/backends/mysql.md)
+- [SQLite sink guide](docs/backends/sqlite.md)
 - [Configuration reference](docs/configuration.md)
 - [CLI reference](docs/cli.md)
 - [Architecture](docs/architecture.md)
@@ -208,7 +242,7 @@ ruff format --check # formatting
 pytest              # unit tests (no DB/network required)
 ```
 
-Tests are pure unit tests. Integration tests that need PostgreSQL are skipped unless `POSTGRES_DSN` is set.
+Tests are pure unit tests. SQLite contract tests run in-process on every `pytest`; integration tests that need a server (PostgreSQL, SurrealDB, MySQL) are skipped unless that sink is configured.
 
 ## Contributing
 

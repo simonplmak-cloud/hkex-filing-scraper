@@ -16,9 +16,9 @@ hkex-scraper [options]
 | `--backfill-docs` | flag | off | Phase 2 only — process documents for filings already in the database. |
 | `--link-only` | flag | off | Only create/refresh graph edges. |
 | `--dry-run` | flag | off | Fetch data but write nothing. |
-| `--database-target TARGET` | `surrealdb`\|`postgres`\|`both` | from `DATABASE_TARGET` | Override the sink for this run. |
-| `--coverage-report` | flag | off | Print chunk coverage from the active sink, then exit. |
-| `--parity-report` | flag | off | Print per-sink filing counts and difference, then exit. Requires `postgres`. |
+| `--database-target SINKS` | comma-separated sink ids | from `DATABASE_TARGET` | Override the sinks for this run. Valid: `postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb`. Order sets read precedence. |
+| `--coverage-report` | flag | off | Print chunk coverage from the read source, then exit. |
+| `--parity-report` | flag | off | Print per-sink filing counts and the spread, then exit. Requires two or more sinks. |
 | `--version` | flag | — | Print the version and exit. |
 
 ## Behaviour
@@ -31,8 +31,8 @@ hkex-scraper [options]
 
 | Code | Meaning |
 | ---- | ------- |
-| `0` | Success (no required-sink failures). Failures on an *optional* sink are logged and counted but do not change the exit code. |
-| `1` | A required sink failed (SurrealDB when enabled; PostgreSQL when it is the only sink), or configuration is invalid/unusable. |
+| `0` | Success — every configured sink's writes succeeded. |
+| `1` | A configured sink failed a write, or configuration is invalid/unusable (unset/unknown `DATABASE_TARGET`, missing driver or connection details). |
 
 ## Examples
 
@@ -51,7 +51,7 @@ hkex-scraper --dry-run --limit 10
 
 # Coverage and parity
 hkex-scraper --coverage-report
-hkex-scraper --database-target both --parity-report
+hkex-scraper --database-target postgres,sqlite --parity-report
 
 # Version
 hkex-scraper --version

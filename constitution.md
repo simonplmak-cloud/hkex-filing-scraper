@@ -1,14 +1,14 @@
 # Constitution
 
 Status: Approved
-Version: 3.0
+Version: 4.0
 Last updated: 2026-09-16
 
 > Impact Chain: Phase 0 — Constitution (immutable)
 
 ## Purpose
 
-Build the most useful, feature-rich, and trustworthy open-source tool in the HKEx regulatory filings data category. The tool scrapes HKEx regulatory filings via an undocumented JSON API and ingests them into **one or more configured database sinks** — SurrealDB (primary, graph-capable) and PostgreSQL (optional, relational) — with full-text/tables extraction and optional graph edges, so downstream systems can process a complete, faithful, provenance-preserving corpus from whichever store they already operate.
+Build the most useful, feature-rich, and trustworthy open-source tool in the HKEx regulatory filings data category. The tool scrapes HKEx regulatory filings via an undocumented JSON API and ingests them into **one or more configured database sinks** — relational (PostgreSQL, MySQL/MariaDB, SQLite) and graph/document (SurrealDB) — with full-text/tables extraction and optional graph edges, so downstream systems can process a complete, faithful, provenance-preserving corpus from whichever store they already operate.
 
 ## Core Principles
 
@@ -59,8 +59,11 @@ When more than one sink is configured, every record written to one sink MUST be 
 | Optional PDF | PyMuPDF, pymupdf4llm, camelot-py | guarded by `_AVAILABLE` flags |
 | Optional Excel | openpyxl | guarded by `_AVAILABLE` flags |
 | Optional env | python-dotenv | graceful fallback if missing |
-| Primary database | SurrealDB | `/sql` (1 MiB) + `/rpc` (4 MiB) endpoints |
-| Optional database | PostgreSQL 13+ | `psycopg` 3.x (`psycopg[binary,pool]`), `ON CONFLICT` upserts, JSONB for tables |
+| Database sinks | PostgreSQL, MySQL/MariaDB, SQLite, SurrealDB | selected via ordered `DATABASE_TARGET`; contract in `sinks/base.py:Sink`, registry in `sinks/registry.py` |
+| Relational PostgreSQL | PostgreSQL 13+ | `psycopg` 3.x (`psycopg[binary,pool]`), `ON CONFLICT` upserts, JSONB for tables |
+| Relational MySQL/MariaDB | MySQL 8 / MariaDB 10.5+ | `PyMySQL` (`mysql` extra), `ON DUPLICATE KEY UPDATE` upserts |
+| Relational SQLite | SQLite 3 | stdlib `sqlite3`, no extra |
+| Graph/document | SurrealDB | `/sql` (1 MiB) + `/rpc` (4 MiB) endpoints |
 | Testing | pytest | pure unit tests, no DB/network |
 | Lint | ruff | py310 target, line-length 100 |
 
@@ -75,8 +78,8 @@ When more than one sink is configured, every record written to one sink MUST be 
 | `filingId` | MD5 hash of key fields used for deduplication (primary key in both sinks) |
 | `documentStatus` | `processed` / `skipped` / `failed` outcome of document processing |
 | Graph edge | `has_filing` (company → filing) or `references_filing` (title mention) |
-| Sink | A configured persistence target — `surrealdb`, `postgres`, or both (`DATABASE_TARGET`) |
-| Dual-write | Writing the same record to every configured sink within one pipeline phase |
+| Sink | A configured persistence target — one of `postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb` (`DATABASE_TARGET`, an ordered CSV list) |
+| Multi-write | Writing the same record to every configured sink within one pipeline phase |
 
 ## Security Constraints
 
@@ -111,7 +114,8 @@ src/hkex_scraper/
   extractor.py   # PDF/HTML/Excel text + table extraction → Markdown
   db.py          # SurrealDB /sql + /rpc helpers, schema DDL, batch upsert
   db_postgres.py # PostgreSQL sink: optional driver, DDL, parameterized ON CONFLICT upserts
-  graph.py       # has_filing / references_filing edge creation
+  sinks/         # Sink contract, registry, SQL dialects, relational engine, per-engine adapters
+  graph.py       # has_filing / references_filing edge dispatch
   utils.py       # logging, string helpers, filing classification, tickers
 tests/           # pure unit tests (no DB/network)
 ```
@@ -120,9 +124,11 @@ tests/           # pure unit tests (no DB/network)
 
 | Decision | Rationale |
 |----------|-----------|
-| SurrealDB as primary store | Native graph edges, SCHEMAFULL for data integrity, parameterized RPC for large payloads |
-| PostgreSQL as optional relational sink | Downstream teams standardise on SQL/Postgres; removes the graph-DB adoption barrier without abandoning it |
-| Sink selection via `DATABASE_TARGET` | One env var selects `surrealdb` (default), `postgres`, or both; backward compatible with existing deployments |
+| Uniform sink contract with a lazy registry | One `Sink` interface + declared capabilities + hand-written dialects; adding a backend is one adapter + one registry entry, not a four-file edit |
+| Relational sinks for SQL teams | PostgreSQL, MySQL/MariaDB, SQLite let downstream teams use tooling they already run |
+| SurrealDB as the graph/document sink | Native graph edges, SCHEMAFULL integrity, parameterized RPC for large payloads |
+| Sink selection via `DATABASE_TARGET` | An ordered CSV list of sink ids; order sets read precedence (first read-capable sink). No silent default — unset or unknown fails fast |
+| Open-source-first support policy | OSI-approved engines by default; source-available engines (SurrealDB, and later MongoDB) are explicit, labelled exceptions (see `docs/adr/0003-sink-support-policy.md`) |
 | Two-phase pipeline (metadata → documents) | Decouples fast metadata ingestion from slow document processing; enables backfill and incremental updates |
 | CLI-first, not GUI-first | Maximizes composability with scripts, cron jobs, and CI/CD pipelines |
 | Undocumented JSON API over browser automation | Faster, more reliable batch scraping; no Selenium dependency |
@@ -133,6 +139,6 @@ tests/           # pure unit tests (no DB/network)
 
 - No production dependency on prohibited scraping (HKEX Terms of Use §4.3). The undocumented API is a research tool. Commercial redistribution requires licensed feed access.
 - No silent data loss. Every truncation, skip, or failure must be logged and surfaced via `documentStatus` and `documentStatusReason`, and via per-sink write counters.
-- No breaking schema changes without migration. Every new field must have a `DEFINE FIELD IF NOT EXISTS` (SurrealDB) and a matched `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (PostgreSQL).
+- No breaking schema changes without migration. Every new field must have a `DEFINE FIELD IF NOT EXISTS` (SurrealDB) and a matched `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (PostgreSQL), plus a matching `sinks/dialects.py` column.
 - No hardcoded credentials. All secrets come from environment variables or `.env`.
-- No required dependency on PostgreSQL. Missing driver or DSN must degrade gracefully, never crash the scrape.
+- No base dependency on any database driver. All drivers are optional extras with graceful degradation; a configured but unusable sink fails fast with an actionable message rather than appearing to succeed.

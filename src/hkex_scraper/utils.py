@@ -182,3 +182,30 @@ def extract_referenced_tickers(title: str, own_stock_code: str) -> List[str]:
         if normalized != own_normalized:
             result.append(f"{normalized.zfill(4)}.HK")
     return sorted(set(result))
+
+
+# ---------------------------------------------------------------------------
+# Company key helpers (shared by the graph linker and the relational sinks)
+# ---------------------------------------------------------------------------
+def ticker_to_record_id(ticker: str) -> str:
+    """Convert a ticker (e.g. ``0451.HK``) to a company key.
+
+    Default pattern ``{code}_{exchange}`` produces ``451_HK``.
+    """
+    from .config import COMPANY_ID_PATTERN
+
+    parts = ticker.split(".")
+    code = parts[0].lstrip("0") or "0"
+    exchange = parts[1] if len(parts) > 1 else "HK"
+    return COMPANY_ID_PATTERN.format(code=code, exchange=exchange)
+
+
+def normalize_company_id(full_id: str) -> str:
+    """Normalise a DB record id (``company:451_HK``) to its key (``451_HK``)."""
+    if ":" in full_id:
+        tail = full_id.rsplit(":", 1)[-1]
+        parts = tail.split("_", 1)
+        code = parts[0].lstrip("0") or "0"
+        exchange = parts[1] if len(parts) > 1 else ""
+        return f"{code}_{exchange}"
+    return full_id
