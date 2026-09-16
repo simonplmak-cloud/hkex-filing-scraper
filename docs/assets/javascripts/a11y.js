@@ -15,11 +15,31 @@
     }
   }
 
-  labelSearchToggle();
-  document.addEventListener("DOMContentLoaded", labelSearchToggle);
+  function makeScrollWrappersFocusable() {
+    // Material wraps horizontally scrollable tables in .md-typeset__scrollwrap. A scroll
+    // container must be keyboard reachable (axe: scrollable-region-focusable).
+    var wrappers = document.querySelectorAll(".md-typeset__scrollwrap");
+    for (var i = 0; i < wrappers.length; i++) {
+      var wrapper = wrappers[i];
+      if (wrapper.getAttribute("tabindex") !== "0") {
+        wrapper.setAttribute("tabindex", "0");
+        wrapper.setAttribute("role", "region");
+        wrapper.setAttribute("aria-label", "Scrollable table");
+      }
+    }
+  }
+
+  function enhance() {
+    labelSearchToggle();
+    makeScrollWrappersFocusable();
+  }
+
+  enhance();
+  document.addEventListener("DOMContentLoaded", enhance);
+  window.addEventListener("load", enhance);
 
   // Material's instant-loading observable re-renders content on navigation.
   if (typeof document$ !== "undefined" && typeof document$.subscribe === "function") {
-    document$.subscribe(labelSearchToggle);
+    document$.subscribe(enhance);
   }
 })();

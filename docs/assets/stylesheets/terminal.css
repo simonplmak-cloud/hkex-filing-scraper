@@ -130,16 +130,41 @@ body,
   color: var(--term-text);
 }
 
-/* Links: amber, underlined on hover/focus so colour is never the only cue. */
+/* Links: amber, and underlined in prose so colour is never the only cue
+ * (WCAG 1.4.1). Dense chrome (nav, tables, header, footer) stays un-underlined. */
 .md-typeset a {
   color: var(--term-amber);
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
 }
 
 .md-typeset a:hover,
 .md-typeset a:focus {
   color: var(--term-amber-soft);
-  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+.md-nav a,
+.md-header a,
+.md-tabs a,
+.md-footer a,
+.md-typeset table a,
+.md-typeset .md-tags a,
+.md-typeset .headerlink {
+  text-decoration: none;
+}
+
+.md-typeset .headerlink:hover,
+.md-typeset .headerlink:focus {
+  text-decoration: none;
+}
+
+/* Material wraps wide tables in a scroll container. Give it a visible boundary so the
+ * focus ring added by the a11y script is meaningful. */
+.md-typeset__scrollwrap:focus-visible {
+  outline: 2px solid var(--term-amber);
+  outline-offset: 2px;
 }
 
 .md-typeset a:focus-visible,
