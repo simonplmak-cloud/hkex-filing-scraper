@@ -299,6 +299,7 @@ Configuration is loaded from `.env` in the **current working directory** (not th
 | `COMPANY_TABLE` | — | Company table; enables graph edges. |
 | `COMPANY_ID_PATTERN` | `{code}_{exchange}` | Ticker → company key pattern. |
 | `MAX_DOWNLOAD_WORKERS` | `15` | Parallel document downloads. |
+| `REQUEST_DELAY_SECONDS` | `0` | Minimum seconds between request starts (pacing). |
 
 ## Database schema
 

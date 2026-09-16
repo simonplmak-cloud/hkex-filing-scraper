@@ -74,6 +74,7 @@ all = [
 ]
 dev = [
     "pytest>=7.0",
+    "responses>=0.25",
     "ruff>=0.16,<0.17",
 ]
 

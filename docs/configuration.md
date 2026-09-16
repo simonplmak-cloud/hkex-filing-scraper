@@ -119,6 +119,7 @@ Required when `DATABASE_TARGET` includes `surrealdb`.
 | Variable | Default | Description |
 | -------- | ------- | ----------- |
 | `MAX_DOWNLOAD_WORKERS` | `15` | Parallel document downloads. |
+| `REQUEST_DELAY_SECONDS` | `0` | Minimum seconds between request starts, process-wide. `0` disables pacing; set a small value (e.g. `0.25`) to be deliberately polite to the endpoint. |
 
 ## Precedence
 

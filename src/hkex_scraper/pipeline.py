@@ -9,13 +9,11 @@ from __future__ import annotations
 import hashlib
 import io
 import sys
-import urllib.error
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 
-from . import sinks
+from . import http, sinks
 from .api import REQUESTS_AVAILABLE, fetch_chunk_via_api, generate_monthly_chunks
 from .config import MAX_DOWNLOAD_SIZE, MAX_DOWNLOAD_WORKERS
 from .extractor import extract_content_with_tables
@@ -114,29 +112,38 @@ def _download_document(url: str, filing_id: str) -> Tuple[bytes, int, str]:
     u = url.lower().split("?")[0].split("#")[0]
     if not any(u.endswith(ext) for ext in SUPPORTED_EXTENSIONS):
         return b"", 0, "unsupported_type"
+    http.pace()
     try:
-        req = urllib.request.Request(
+        with http.get_session().get(
             url,
             headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 "Accept": (
                     "application/pdf,text/html,"
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
                     "*/*;q=0.8"
-                ),
+                )
             },
-        )
-        with urllib.request.urlopen(req, timeout=60) as response:
+            timeout=(10, 60),
+            stream=True,
+        ) as response:
+            if response.status_code >= 400:
+                log(f"  Download error for {filing_id}: HTTP {response.status_code}")
+                return b"", 0, f"http_{response.status_code}"
+
             content_length = response.headers.get("Content-Length")
             if content_length and int(content_length) > MAX_DOWNLOAD_SIZE:
                 return b"", 0, "too_large"
-            content = response.read()
-            if len(content) > MAX_DOWNLOAD_SIZE:
-                return b"", 0, "too_large"
+
+            # Stream so a document that grows past the cap never fills memory.
+            buffer = bytearray()
+            for block in response.iter_content(256 * 1024):
+                if not block:
+                    continue
+                buffer.extend(block)
+                if len(buffer) > MAX_DOWNLOAD_SIZE:
+                    return b"", 0, "too_large"
+            content = bytes(buffer)
             return content, len(content), ""
-    except urllib.error.HTTPError as e:
-        log(f"  Download error for {filing_id}: HTTP {e.code}")
-        return b"", 0, f"http_{e.code}"
     except Exception as e:
         log(f"  Download error for {filing_id}: {type(e).__name__}: {e}")
         return b"", 0, f"error:{type(e).__name__}"
@@ -157,7 +164,8 @@ def _download_worker(args: Tuple[str, str]) -> Tuple[str, str, bytes, int, str]:
 def filing_id_for(filing: Dict[str, Any]) -> str:
     """Return the stable filing identifier used as the upsert key everywhere."""
     return hashlib.md5(
-        f"{filing['stockCode']}{filing['date']}{filing.get('title', '')}".encode()
+        f"{filing['stockCode']}{filing['date']}{filing.get('title', '')}".encode(),
+        usedforsecurity=False,
     ).hexdigest()[:16]
 
 
@@ -267,7 +275,9 @@ def _save_document_to_filing(
     payload: Dict[str, Any] = {
         "document_size": size_bytes,
         "document_type": _document_type(doc_url),
-        "document_hash": hashlib.md5(raw_bytes).hexdigest() if raw_bytes else "",
+        "document_hash": (
+            hashlib.md5(raw_bytes, usedforsecurity=False).hexdigest() if raw_bytes else ""
+        ),
         "document_text": extracted_text,
         "document_text_len": len(extracted_text),
         "document_tables": tables_list,
@@ -340,8 +350,6 @@ def run_phase1(
         log("ERROR: 'requests' library not installed. Run: pip install requests")
         return 0, set()
 
-    import requests as _requests
-
     today = datetime.now()
     if full_history:
         dt_from = datetime(1999, 4, 1)
@@ -367,10 +375,7 @@ def run_phase1(
     log(f"Max filings: {'unlimited' if max_filings <= 0 else max_filings}")
     log("")
 
-    session = _requests.Session()
-    session.headers.update(
-        {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    )
+    session = http.get_session()
 
     all_filings: list = []
     saved_ids: set[str] = set()

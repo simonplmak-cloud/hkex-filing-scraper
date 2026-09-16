@@ -1,4 +1,4 @@
-"""HKEx Filing Scraper — scrape HKEx regulatory filings into SurrealDB and/or PostgreSQL."""
+"""HKEx Filing Scraper — scrape HKEx regulatory filings into any configured database sink."""
 
 __version__: str
 try:
