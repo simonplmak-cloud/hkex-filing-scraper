@@ -4,22 +4,32 @@
 
 ```mermaid
 flowchart LR
-    A[HKEx JSON API] --> B[Phase 1<br/>metadata scrape]
-    B --> C[Sink dispatch]
-    C --> S[(SurrealDB)]
-    C --> P[(PostgreSQL)]
-    C --> X[(MySQL / SQLite / DuckDB<br/>MongoDB / ClickHouse / Neo4j)]
+    A[HKEx JSON API] --> B[Phase 1: metadata]
+    B --> C[Canonical record]
+    C --> D{DATABASE_TARGET}
+    D --> S1[(PostgreSQL)]
+    D --> S2[(MySQL / MariaDB)]
+    D --> S3[(SQLite)]
+    D --> S4[(MongoDB)]
+    D --> S5[(Neo4j)]
+    D --> S6[(ClickHouse)]
+    D --> S7[(DuckDB)]
+    D --> S8[(SurrealDB)]
     B --> G[Graph linking]
-    G --> C
-    B --> D[Phase 2<br/>download + extract]
-    D --> C
+    G --> D
+    B --> P2[Phase 2: download + extract]
+    P2 --> C
 ```
 
-**Phase 1 — metadata.** `api.py` establishes a JSF session (`ViewState`), splits the range into monthly chunks, paginates `titleSearchServlet.do`, and parses records. Each filing is classified and deduplicated by a 16-char MD5 key (`filingId`), then persisted.
+**Phase 1 — metadata.** `api.py` establishes a JSF session (`ViewState`), splits the range
+into monthly chunks, paginates `titleSearchServlet.do`, and parses records. Each filing is
+classified and deduplicated by a 16-char MD5 key (`filingId`), then persisted.
 
-**Graph linking.** With `COMPANY_TABLE` set, `graph.py` creates `has_filing` and `references_filing` edges on every edge-capable sink.
+**Graph linking.** With `COMPANY_TABLE` set, `graph.py` creates `has_filing` and
+`references_filing` edges on every edge-capable sink.
 
-**Phase 2 — documents.** Filings with a URL but no `documentStatus` are downloaded in parallel, extracted to Markdown text + structured tables (`extractor.py`), and saved.
+**Phase 2 — documents.** Filings with a URL but no `documentStatus` are downloaded in
+parallel, extracted to Markdown text + structured tables (`extractor.py`), and saved.
 
 ## Sink seam
 
@@ -27,14 +37,13 @@ Persistence is centralised behind one contract so a new destination is a localis
 
 - `sinks/base.py` defines `Sink` (write/read methods returning `(value, error_code)`) and
   `SinkCapabilities` (upsert, reads, edges, JSON, arrays, limits).
-- `sinks/registry.py` maps each id — `postgres`, `mysql`, `mariadb`, `sqlite`, `duckdb`,
-  `mongodb`, `clickhouse`, `neo4j`, `surrealdb` — to its licence, OSI status, optional extra,
+- `sinks/registry.py` maps each id — `postgres`, `mysql`, `sqlite`, `mongodb`, `mariadb`,
+  `neo4j`, `clickhouse`, `duckdb`, `surrealdb` — to its license, OSI status, optional extra,
   and a **lazily imported** factory.
-- `sinks/relational.py` + `sinks/dialects.py` implement the SQL dialects (PostgreSQL, MySQL/MariaDB,
-  SQLite, DuckDB) through one shared loop; `sinks/postgres.py` adapts the existing
-  `db_postgres.py`; `sinks/mongodb.py`, `sinks/clickhouse.py`, and `sinks/neo4j.py` are
-  document/columnar/graph adapters; `sinks/surrealdb.py` owns SurrealQL, `RELATE`, the
-  RPC→`/sql` fallback, and company-id resolution.
+- `sinks/relational.py` + `sinks/dialects.py` implement the SQL dialects (PostgreSQL,
+  MySQL/MariaDB, SQLite, DuckDB) through one shared loop; the remaining adapters are
+  `sinks/postgres.py`, `sinks/mongodb.py`, `sinks/clickhouse.py`, `sinks/neo4j.py`, and
+  `sinks/surrealdb.py`.
 - `config.py` parses `DATABASE_TARGET` into an ordered list (`sink_ids()`); reads are served
   by the first configured sink whose capabilities include `reads`.
 - `pipeline.py` builds one canonical value object per filing/document/coverage/edge and
@@ -45,18 +54,10 @@ Persistence is centralised behind one contract so a new destination is a localis
 
 ```mermaid
 flowchart TD
-    V[Value object<br/>filing / document / coverage / edge] --> D[DATABASE_TARGET<br/>ordered sink list]
-    D --> S[(SurrealDB)]
-    D --> P[(PostgreSQL)]
-    D --> M[(MySQL / MariaDB)]
-    D --> L[(SQLite / DuckDB)]
-    D --> B[(MongoDB / ClickHouse / Neo4j)]
-    S --> R[record_sink per sink]
-    P --> R
-    M --> R
-    L --> R
-    B --> R
-    R --> X{any configured sink failed?}
+    V[Canonical record<br/>filing / document / coverage / edge] --> D[DATABASE_TARGET<br/>ordered sink list]
+    D --> R[Dispatch to each sink]
+    R --> C[record_sink per sink]
+    C --> X{any configured sink failed?}
     X -->|yes| E[exit 1]
     X -->|no| O[exit 0]
 ```
@@ -72,19 +73,22 @@ flowchart TD
 ## Data fidelity
 
 - Text and tables are extracted once into one canonical payload; each sink applies its own
-  declared limit (SurrealDB truncates for its RPC body size; relational sinks store the text column).
-- Truncation and skip reasons are surfaced via `documentStatus`/`documentStatusReason` (SurrealDB,
-  Neo4j) and `document_status`/`document_status_reason` (relational).
-- `document_tables` keeps its object shape as `jsonb` (PostgreSQL), `json` (MySQL/MariaDB),
-  JSON text (SQLite/DuckDB/ClickHouse), an embedded array (MongoDB), or a JSON string (Neo4j);
-  `referenced_tickers` is `text[]` (PostgreSQL), `json` (MySQL), JSON text (SQLite/DuckDB),
-  `Array(String)` (ClickHouse), an array (MongoDB), or a string array (Neo4j).
+  declared limit (for example, the SurrealDB adapter truncates to fit its RPC body size,
+  while the relational sinks store the text column unchanged).
+- Truncation and skip reasons are surfaced via `documentStatus`/`documentStatusReason`
+  (SurrealDB, Neo4j) and `document_status`/`document_status_reason` (relational).
+- `document_tables` keeps its object shape per sink: `jsonb` (PostgreSQL), `json`
+  (MySQL/MariaDB), JSON text (SQLite/DuckDB/ClickHouse), an embedded array (MongoDB), or a
+  JSON string (Neo4j). `referenced_tickers` is `text[]` (PostgreSQL), `json` (MySQL),
+  JSON text (SQLite/DuckDB), `Array(String)` (ClickHouse), an array (MongoDB), or a string
+  array (Neo4j).
 
 ## Edge semantics
 
-- **SurrealDB** creates an edge only for a ticker that exists in the configured company table.
-- **Relational, MongoDB, and Neo4j** sinks create an edge for every ticker, deriving the company
-  key from `COMPANY_ID_PATTERN` (Neo4j and MongoDB also create the company node/document).
+- Every edge-capable sink creates `has_filing` and `references_filing` edges, deriving the
+  company key from `COMPANY_ID_PATTERN`.
+- The SurrealDB adapter additionally requires the ticker to exist in the configured company
+  table; MongoDB and Neo4j also create the company node/document.
 
 ## Module map
 
@@ -98,7 +102,7 @@ flowchart TD
 | `db.py` | SurrealDB `/sql` + `/rpc`, schema DDL, batch upsert |
 | `db_postgres.py` | PostgreSQL DDL, upserts, read helpers |
 | `sinks/base.py` | `Sink` contract, `SinkCapabilities`, error codes, `redact()` |
-| `sinks/registry.py` | Lazy id→factory map with licence/OSI/extra metadata |
+| `sinks/registry.py` | Lazy id→factory map with license/OSI/extra metadata |
 | `sinks/dialects.py` | Per-dialect SQL: placeholders, quoting, types, upsert/DDL/select builders |
 | `sinks/relational.py` | Shared relational engine (batching, redaction, degradation) |
 | `sinks/{postgres,mysql,sqlite,duckdb}.py` | Relational adapters |

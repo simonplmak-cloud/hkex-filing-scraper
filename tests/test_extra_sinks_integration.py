@@ -1,4 +1,4 @@
-"""Live integration tests for the Tier 2 server-backed sinks.
+"""Live integration tests for the server-backed document, columnar, and graph sinks.
 
 Each engine's tests are skipped unless that sink is configured, so the default
 ``pytest`` run stays offline. DuckDB runs in ``tests/test_duckdb_integration.py``.

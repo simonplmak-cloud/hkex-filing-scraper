@@ -32,7 +32,8 @@ def _validate_env() -> None:
     if not ids:
         log(
             "ERROR: DATABASE_TARGET is not set. "
-            f"Set it to one or more sink ids (e.g. DATABASE_TARGET={sinks.DEFAULT_SINK}). "
+            "Set it to one or more sink ids, ordered, comma-separated "
+            "(e.g. DATABASE_TARGET=postgres,sqlite). "
             f"Valid sinks: {', '.join(sinks.known_ids())}"
         )
         sys.exit(1)

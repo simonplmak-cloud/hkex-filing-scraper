@@ -1,0 +1,32 @@
+{
+  // House rules: see docs/STYLE.md.
+  "config": {
+    "default": true,
+    // Prose is wrapped for diffs, not to a fixed width.
+    "MD013": false,
+    // Inline HTML is allowed (badges, <https://…> autolinks, centered blocks).
+    "MD033": false,
+    // Bold text is used as a label, not as a pseudo-heading.
+    "MD036": false,
+    // Some files intentionally start with an HTML comment (PR template).
+    "MD041": false,
+    // Heading-anchor checks are brittle with em dashes and unicode; mkdocs verifies links.
+    "MD051": false,
+    // Table pipe spacing style is cosmetic and fights the alignment used across the docs.
+    "MD060": false,
+    // Duplicate headings are fine across sibling sections of long reference pages.
+    "MD024": { "siblings_only": true },
+    // Every fenced block should be language-tagged.
+    "MD040": true,
+    // Fenced code blocks only (no indented blocks).
+    "MD046": { "style": "fenced" }
+  },
+  "globs": ["**/*.md"],
+  "ignores": [
+    "node_modules/**",
+    ".venv/**",
+    "vdd/**",
+    "docs/releases/**",
+    "CHANGELOG.md"
+  ]
+}

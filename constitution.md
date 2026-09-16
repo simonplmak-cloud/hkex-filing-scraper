@@ -8,7 +8,7 @@ Last updated: 2026-09-16
 
 ## Purpose
 
-Build the most useful, feature-rich, and trustworthy open-source tool in the HKEx regulatory filings data category. The tool scrapes HKEx regulatory filings via an undocumented JSON API and ingests them into **one or more configured database sinks** — relational (PostgreSQL, MySQL/MariaDB, SQLite) and graph/document (SurrealDB) — with full-text/tables extraction and optional graph edges, so downstream systems can process a complete, faithful, provenance-preserving corpus from whichever store they already operate.
+Build the most useful, feature-rich, and trustworthy open-source tool in the HKEx regulatory filings data category. The tool scrapes HKEx regulatory filings via an undocumented JSON API and ingests them into **one or more configured database sinks** — `postgres`, `mysql`, `sqlite`, `mongodb`, `mariadb`, `neo4j`, `clickhouse`, `duckdb`, `surrealdb` — with full-text/tables extraction and optional graph edges, so downstream systems can process a complete, faithful, provenance-preserving corpus from whichever store they already operate. All sinks are first-class; none is privileged.
 
 ## Core Principles
 
@@ -38,7 +38,7 @@ Configuration is loaded from CWD `.env` — not the project root. SurrealDB `/rp
 
 ### 7. Schema Stability Must Be Explicit
 
-`exchange_filing` is SCHEMAFULL in SurrealDB, and a typed `CREATE TABLE IF NOT EXISTS` model in PostgreSQL. Adding a field requires updating the DDL in `db.py:_build_schema_sql()` and the mirror DDL in `db_postgres.py:_build_postgres_schema_sql()`. Migrations run safely at every startup using `IF NOT EXISTS`.
+Every sink has an explicit schema. `exchange_filing` is SCHEMAFULL in SurrealDB and a typed `CREATE TABLE IF NOT EXISTS` model in PostgreSQL; the other sinks mirror that model in their own dialect. Adding a field requires updating `db.py:_build_schema_sql()`, `db_postgres.py:_build_postgres_schema_sql()`, `sinks/dialects.py`, and the document/graph adapter field lists. Migrations run safely at every startup using `IF NOT EXISTS`.
 
 ### 8. Progressive Enhancement Over Monolithic Dependencies
 
@@ -56,10 +56,10 @@ When more than one sink is configured, every record written to one sink MUST be 
 | Build | hatchling | src-layout, single console script `hkex-scraper` |
 | HTTP | `requests` | base dep, always available |
 | HTML parsing | `beautifulsoup4` | base dep, always available |
-| Optional PDF | PyMuPDF, pymupdf4llm, camelot-py | guarded by `_AVAILABLE` flags |
+| Optional PDF | PyMuPDF, pymupdf4llm (AGPL-3.0), camelot-py | guarded by `_AVAILABLE` flags; the `pdf` extra is excluded from `all` |
 | Optional Excel | openpyxl | guarded by `_AVAILABLE` flags |
 | Optional env | python-dotenv | graceful fallback if missing |
-| Database sinks | PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, ClickHouse, Neo4j, SurrealDB | selected via ordered `DATABASE_TARGET`; contract in `sinks/base.py:Sink`, registry in `sinks/registry.py` |
+| Database sinks | `postgres`, `mysql`, `sqlite`, `mongodb`, `mariadb`, `neo4j`, `clickhouse`, `duckdb`, `surrealdb` | selected via ordered `DATABASE_TARGET`; contract in `sinks/base.py:Sink`, registry in `sinks/registry.py`; order is documented popularity order |
 | Relational PostgreSQL | PostgreSQL 13+ | `psycopg` 3.x (`psycopg[binary,pool]`), `ON CONFLICT` upserts, JSONB for tables |
 | Relational MySQL/MariaDB | MySQL 8 / MariaDB 10.5+ | `PyMySQL` (`mysql` extra), `ON DUPLICATE KEY UPDATE` upserts |
 | Relational SQLite / DuckDB | SQLite 3 / DuckDB 1.x | stdlib `sqlite3`; `duckdb` extra; `ON CONFLICT` upserts, JSON columns |
@@ -78,10 +78,10 @@ When more than one sink is configured, every record written to one sink MUST be 
 | Phase 1 | Scrape filing metadata from the HKEx JSON API |
 | Phase 2 | Download documents + extract text/tables into Markdown |
 | Chunk | One month-range slice of the search space when no stock code is specified |
-| `filingId` | MD5 hash of key fields used for deduplication (primary key in both sinks) |
+| `filingId` | MD5 hash of key fields used for deduplication (primary key in every sink) |
 | `documentStatus` | `processed` / `skipped` / `failed` outcome of document processing |
 | Graph edge | `has_filing` (company → filing) or `references_filing` (title mention) |
-| Sink | A configured persistence target — one of `postgres`, `mysql`, `mariadb`, `sqlite`, `duckdb`, `mongodb`, `clickhouse`, `neo4j`, `surrealdb` (`DATABASE_TARGET`, an ordered CSV list) |
+| Sink | A configured persistence target — one of `postgres`, `mysql`, `sqlite`, `mongodb`, `mariadb`, `neo4j`, `clickhouse`, `duckdb`, `surrealdb` (`DATABASE_TARGET`, an ordered CSV list) |
 | Multi-write | Writing the same record to every configured sink within one pipeline phase |
 
 ## Security Constraints
@@ -108,7 +108,7 @@ When more than one sink is configured, every record written to one sink MUST be 
 
 ## File Structure
 
-```
+```text
 src/hkex_scraper/
   main.py        # CLI parsing, orchestration, validation
   config.py      # env vars + constants (loaded at import from CWD .env)
@@ -127,7 +127,7 @@ tests/           # pure unit tests (no DB/network)
 
 | Decision | Rationale |
 |----------|-----------|
-| Uniform sink contract with a lazy registry | One `Sink` interface + declared capabilities + hand-written dialects; adding a backend is one adapter + one registry entry, not a four-file edit |
+| Uniform sink contract with a lazy registry | One `Sink` interface + declared capabilities + hand-written dialects; adding a sink is one adapter + one registry entry, not a four-file edit |
 | Relational sinks for SQL teams | PostgreSQL, MySQL/MariaDB, SQLite let downstream teams use tooling they already run |
 | SurrealDB as the graph/document sink | Native graph edges, SCHEMAFULL integrity, parameterized RPC for large payloads |
 | Sink selection via `DATABASE_TARGET` | An ordered CSV list of sink ids; order sets read precedence (first read-capable sink). No silent default — unset or unknown fails fast |

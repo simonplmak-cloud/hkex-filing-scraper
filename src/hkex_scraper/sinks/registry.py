@@ -80,6 +80,22 @@ def _neo4j() -> Sink:
     return Neo4jSink()
 
 
+# Documented order: sinks sorted by developer usage (Stack Overflow Developer
+# Survey 2025: PostgreSQL, MySQL, SQLite, MongoDB, MariaDB), then the remaining
+# engines by DB-Engines popularity. This single order drives the README, the docs,
+# the CLI help, the .env template, and the wiki sidebar.
+POPULARITY_ORDER: List[str] = [
+    "postgres",
+    "mysql",
+    "sqlite",
+    "mongodb",
+    "mariadb",
+    "neo4j",
+    "clickhouse",
+    "duckdb",
+    "surrealdb",
+]
+
 SINKS: Dict[str, SinkSpec] = {
     "postgres": SinkSpec(
         id="postgres",
@@ -97,14 +113,6 @@ SINKS: Dict[str, SinkSpec] = {
         extra="mysql",
         factory=_mysql,
     ),
-    "mariadb": SinkSpec(
-        id="mariadb",
-        label="MariaDB",
-        license="GPLv2",
-        source_available=True,
-        extra="mysql",
-        factory=_mariadb,
-    ),
     "sqlite": SinkSpec(
         id="sqlite",
         label="SQLite",
@@ -112,22 +120,6 @@ SINKS: Dict[str, SinkSpec] = {
         source_available=True,
         extra=None,
         factory=_sqlite,
-    ),
-    "surrealdb": SinkSpec(
-        id="surrealdb",
-        label="SurrealDB",
-        license="BSL 1.1 (source-available)",
-        source_available=False,
-        extra=None,
-        factory=_surrealdb,
-    ),
-    "duckdb": SinkSpec(
-        id="duckdb",
-        label="DuckDB",
-        license="MIT",
-        source_available=True,
-        extra="duckdb",
-        factory=_duckdb,
     ),
     "mongodb": SinkSpec(
         id="mongodb",
@@ -137,13 +129,13 @@ SINKS: Dict[str, SinkSpec] = {
         extra="mongodb",
         factory=_mongodb,
     ),
-    "clickhouse": SinkSpec(
-        id="clickhouse",
-        label="ClickHouse",
-        license="Apache-2.0",
+    "mariadb": SinkSpec(
+        id="mariadb",
+        label="MariaDB",
+        license="GPLv2",
         source_available=True,
-        extra="clickhouse",
-        factory=_clickhouse,
+        extra="mysql",
+        factory=_mariadb,
     ),
     "neo4j": SinkSpec(
         id="neo4j",
@@ -153,15 +145,36 @@ SINKS: Dict[str, SinkSpec] = {
         extra="neo4j",
         factory=_neo4j,
     ),
+    "clickhouse": SinkSpec(
+        id="clickhouse",
+        label="ClickHouse",
+        license="Apache-2.0",
+        source_available=True,
+        extra="clickhouse",
+        factory=_clickhouse,
+    ),
+    "duckdb": SinkSpec(
+        id="duckdb",
+        label="DuckDB",
+        license="MIT",
+        source_available=True,
+        extra="duckdb",
+        factory=_duckdb,
+    ),
+    "surrealdb": SinkSpec(
+        id="surrealdb",
+        label="SurrealDB",
+        license="BSL 1.1 (source-available)",
+        source_available=False,
+        extra=None,
+        factory=_surrealdb,
+    ),
 }
-
-# Order used for help/error text and the documented default suggestion.
-DEFAULT_SINK = "postgres"
 
 
 def known_ids() -> List[str]:
-    """Return the sorted list of valid sink ids."""
-    return sorted(SINKS)
+    """Return the valid sink ids in documented (popularity) order."""
+    return list(POPULARITY_ORDER)
 
 
 def spec(sink_id: str) -> SinkSpec:

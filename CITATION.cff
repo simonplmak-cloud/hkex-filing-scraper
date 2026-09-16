@@ -10,7 +10,7 @@ type: software
 license: MIT
 license-url: "https://github.com/simonplmak-cloud/hkex-filing-scraper/blob/main/LICENSE"
 repository-code: "https://github.com/simonplmak-cloud/hkex-filing-scraper"
-url: "https://github.com/simonplmak-cloud/hkex-filing-scraper"
+url: "https://simonplmak-cloud.github.io/hkex-filing-scraper/"
 keywords:
   - hkex
   - regulatory-filings

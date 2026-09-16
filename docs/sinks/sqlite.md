@@ -34,7 +34,7 @@ The schema is created automatically on startup (`CREATE TABLE IF NOT EXISTS` and
 ## Schema
 
 Same tables and keys as every relational sink (see
-[backends overview](README.md#shared-schema)). Datetimes are stored as ISO-8601 `text` and
+[sinks overview](README.md#shared-schema)). Datetimes are stored as ISO-8601 `text` and
 JSON fields (`document_tables`, `referenced_tickers`) as JSON `text`.
 
 Query it with the `sqlite3` CLI or any SQLite client:

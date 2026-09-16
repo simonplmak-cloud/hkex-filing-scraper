@@ -1,18 +1,18 @@
 # Upgrading
 
-## Unreleased → multi-sink architecture (breaking)
+## 1.x → 2.0.0 (breaking)
 
-The sink model changed from a two-value `DATABASE_TARGET` (`surrealdb` | `postgres` | `both`)
-to an **explicit, ordered, comma-separated list of sink ids**, and two new sinks were added
-(MySQL/MariaDB, SQLite).
+Version 2.0.0 replaced the two-value `DATABASE_TARGET` (`surrealdb` | `postgres` | `both`)
+with an **explicit, ordered, comma-separated list of sink ids**, and added seven sinks
+(MySQL/MariaDB, SQLite, MongoDB, Neo4j, ClickHouse, DuckDB).
 
 | Area | Change | Action required |
 | ---- | ------ | --------------- |
-| `DATABASE_TARGET` | Now a CSV list of ids: `postgres`, `mysql`, `mariadb`, `sqlite`, `surrealdb`. | Replace `both` with `surrealdb,postgres`. |
+| `DATABASE_TARGET` | Now a CSV list of ids: `postgres`, `mysql`, `sqlite`, `mongodb`, `mariadb`, `neo4j`, `clickhouse`, `duckdb`, `surrealdb`. | Replace `both` with `surrealdb,postgres`. |
 | Default | **Removed.** An unset or unknown value fails fast with the valid ids. | Always set `DATABASE_TARGET`. |
 | Read routing | Reads come from the first configured sink that supports them. | Put your preferred read store first in the list. |
 | Sink requirements | Every configured sink is required; any write failure exits non-zero. | Configure only sinks you can keep healthy, or accept a non-zero exit on failure. |
-| New sinks | `mysql`/`mariadb` (extra `mysql`), `sqlite` (no extra). | Optional. |
+| New sinks | `mysql`/`mariadb` (extra `mysql`), `sqlite` (no extra), `mongodb` (extra `mongodb`), `neo4j` (extra `neo4j`), `clickhouse` (extra `clickhouse`), `duckdb` (extra `duckdb`). | Optional. |
 | Schema | Unchanged for SurrealDB and PostgreSQL. | None. |
 
 ### Migration examples
@@ -41,10 +41,12 @@ Keeping the previous behaviour (SurrealDB primary, PostgreSQL mirrored) is
 
 1. Install the driver where required: `pip install ".[mysql]"` (SQLite needs nothing).
 2. Add the connection settings and the id to the list, e.g.
+
    ```ini
    DATABASE_TARGET=postgres,sqlite
    SQLITE_PATH=hkex.db
    ```
+
 3. Run `hkex-scraper` as usual. Tables are created automatically.
 
 Multi-write is **forward-only**: data already in one sink is not migrated to another. To

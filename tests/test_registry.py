@@ -10,29 +10,28 @@ from hkex_scraper import config, sinks
 
 
 class TestRegistry:
-    def test_known_ids(self):
+    def test_known_ids_are_documented_popularity_order(self):
         ids = sinks.known_ids()
-        for expected in (
+        assert ids == list(sinks.SINKS), "SINKS must be declared in the documented order"
+        assert set(ids) == {
             "postgres",
             "mysql",
-            "mariadb",
             "sqlite",
-            "surrealdb",
-            "duckdb",
             "mongodb",
-            "clickhouse",
+            "mariadb",
             "neo4j",
-        ):
-            assert expected in ids
-        assert ids == sorted(ids)
+            "clickhouse",
+            "duckdb",
+            "surrealdb",
+        }
 
-    def test_tier1_extra_metadata(self):
+    def test_core_extra_metadata(self):
         assert sinks.spec("postgres").source_available is True
         assert sinks.spec("mysql").extra == "mysql"
         assert sinks.spec("sqlite").extra is None
         assert sinks.spec("surrealdb").source_available is False
 
-    def test_tier2_extra_metadata(self):
+    def test_extra_sink_metadata(self):
         assert sinks.spec("duckdb").source_available is True
         assert sinks.spec("duckdb").extra == "duckdb"
         assert sinks.spec("clickhouse").source_available is True

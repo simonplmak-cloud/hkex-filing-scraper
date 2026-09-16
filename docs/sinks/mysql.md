@@ -48,7 +48,7 @@ are declared inline, because MySQL has no `CREATE INDEX IF NOT EXISTS`). No manu
 ## Schema
 
 Same tables and keys as every relational sink (see
-[backends overview](README.md#shared-schema)). `document_tables` and `referenced_tickers`
+[sinks overview](README.md#shared-schema)). `document_tables` and `referenced_tickers`
 are stored as `json`; long text is `longtext`; timestamps are `datetime(6)`.
 
 ## Notes and limitations

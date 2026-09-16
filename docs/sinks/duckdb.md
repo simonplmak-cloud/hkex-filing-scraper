@@ -31,7 +31,7 @@ The schema is created automatically on startup (`CREATE TABLE IF NOT EXISTS`). N
 
 ## Schema
 
-Same tables and keys as every relational sink (see [backends overview](README.md#shared-schema)).
+Same tables and keys as every relational sink (see [sinks overview](README.md#shared-schema)).
 `document_tables` and `referenced_tickers` are stored as `JSON`; timestamps as `TIMESTAMP`.
 Primary keys only — no secondary indexes (DuckDB is analytical).
 

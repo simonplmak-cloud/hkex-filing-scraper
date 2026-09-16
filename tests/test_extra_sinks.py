@@ -1,4 +1,4 @@
-"""Unit tests for the Tier 2 sinks: MongoDB, ClickHouse, Neo4j.
+"""Unit tests for the document, columnar, and graph sinks: MongoDB, ClickHouse, Neo4j.
 
 Pure unit tests — no database required. Driver-missing/unconfigured degradation,
 capability declarations, and query builders are asserted directly, and the

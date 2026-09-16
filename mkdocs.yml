@@ -1,12 +1,26 @@
 site_name: HKEx Filing Scraper
-site_description: Scrape and ingest HKEx regulatory filings into PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, ClickHouse, Neo4j, or SurrealDB.
+site_description: Scrape and ingest HKEx regulatory filings into PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Neo4j, ClickHouse, DuckDB, or SurrealDB.
 site_url: https://simonplmak-cloud.github.io/hkex-filing-scraper/
+site_author: Simon Mak
 repo_url: https://github.com/simonplmak-cloud/hkex-filing-scraper
 repo_name: simonplmak-cloud/hkex-filing-scraper
 edit_uri: edit/main/docs/
 docs_dir: docs
 theme:
   name: material
+  logo: assets/favicon.svg
+  favicon: assets/favicon.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
   features:
     - navigation.sections
     - navigation.top
@@ -17,29 +31,36 @@ markdown_extensions:
   - tables
   - toc:
       permalink: true
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.details
   - pymdownx.highlight
 nav:
   - Home: index.md
   - Getting started: getting-started.md
-  - Backends:
-      - Overview: backends/README.md
-      - PostgreSQL: postgresql.md
-      - MySQL / MariaDB: backends/mysql.md
-      - SQLite: backends/sqlite.md
-      - DuckDB: backends/duckdb.md
-      - MongoDB: backends/mongodb.md
-      - ClickHouse: backends/clickhouse.md
-      - Neo4j: backends/neo4j.md
+  - Sinks:
+      - Overview: sinks/README.md
+      - PostgreSQL: sinks/postgresql.md
+      - MySQL and MariaDB: sinks/mysql.md
+      - SQLite: sinks/sqlite.md
+      - MongoDB: sinks/mongodb.md
+      - Neo4j: sinks/neo4j.md
+      - ClickHouse: sinks/clickhouse.md
+      - DuckDB: sinks/duckdb.md
+      - SurrealDB: sinks/surrealdb.md
   - Configuration: configuration.md
   - CLI: cli.md
   - Architecture: architecture.md
   - Troubleshooting: troubleshooting.md
   - Testing: testing.md
-  - De-risking: de-risking.md
-  - Legal: legal.md
-  - Upgrading: upgrading.md
+  - Project:
+      - Style guide: STYLE.md
+      - De-risking: de-risking.md
+      - Legal: legal.md
+      - Upgrading: upgrading.md
   - Releasing:
       - How to release: releasing.md
       - Automation reference: release-automation.md

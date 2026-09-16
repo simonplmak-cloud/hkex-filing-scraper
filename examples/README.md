@@ -41,12 +41,12 @@ metadata-only scrape:
 | ---- | ------ |
 | `postgres` | `POSTGRES_DSN=postgresql://hkex:hkex@localhost:5432/hkex` |
 | `mysql` | `MYSQL_HOST=127.0.0.1 MYSQL_PORT=3306 MYSQL_DATABASE=hkex MYSQL_USER=hkex MYSQL_PASSWORD=hkex` |
-| `mariadb` | `MARIADB_HOST=127.0.0.1 MARIADB_PORT=3307 MARIADB_DATABASE=hkex MARIADB_USER=hkex MARIADB_PASSWORD=hkex` |
 | `sqlite` | `SQLITE_PATH=hkex.db` |
-| `duckdb` | `DUCKDB_PATH=hkex.duckdb` |
 | `mongodb` | `MONGODB_URI=mongodb://localhost:27017 MONGODB_DATABASE=hkex` |
-| `clickhouse` | `CLICKHOUSE_HOST=localhost CLICKHOUSE_PORT=8123 CLICKHOUSE_DATABASE=hkex CLICKHOUSE_USER=hkex CLICKHOUSE_PASSWORD=hkex` |
+| `mariadb` | `MARIADB_HOST=127.0.0.1 MARIADB_PORT=3307 MARIADB_DATABASE=hkex MARIADB_USER=hkex MARIADB_PASSWORD=hkex` |
 | `neo4j` | `NEO4J_URI=bolt://localhost:7687 NEO4J_USER=neo4j NEO4J_PASSWORD=hkexpassword` |
+| `clickhouse` | `CLICKHOUSE_HOST=localhost CLICKHOUSE_PORT=8123 CLICKHOUSE_DATABASE=hkex CLICKHOUSE_USER=hkex CLICKHOUSE_PASSWORD=hkex` |
+| `duckdb` | `DUCKDB_PATH=hkex.duckdb` |
 | `surrealdb` | `SURREAL_ENDPOINT=http://localhost:8000 SURREAL_PASSWORD=root` |
 
 ## 3. Tear down

@@ -44,7 +44,7 @@ Phase 1 is always followed by Phase 2 unless `--metadata-only` is passed. `--bac
 | `db.py` | SurrealDB `/sql` and `/rpc` query helpers, schema DDL, batch upsert |
 | `db_postgres.py` | PostgreSQL implementation: `_AVAILABLE` guard, mirrored DDL, parameterised `ON CONFLICT` upserts, read helpers, credential redaction |
 | `sinks/base.py` | `Sink` contract, `SinkCapabilities`, normalised error codes, `redact()` |
-| `sinks/registry.py` | Lazy id→factory map with licence/OSI/extra metadata |
+| `sinks/registry.py` | Lazy id→factory map with license/OSI/extra metadata |
 | `sinks/dialects.py` | Per-dialect SQL: placeholders, quoting, types, upsert/DDL/select builders |
 | `sinks/relational.py` | Shared relational engine (batching, redaction, degradation) |
 | `sinks/postgres.py` / `mysql.py` / `sqlite.py` / `duckdb.py` | Relational adapters (PostgreSQL; MySQL/MariaDB; SQLite; DuckDB) |
@@ -100,3 +100,24 @@ See `api.py:fetch_chunk_via_api()`. The API limits searches to 1 month at a time
 - Log files go to `logs/` in CWD. Failed SQL is appended to `logs/hkex_failed.sql`.
 - Tests are in `tests/` and are pure unit tests — no DB or network. Run with plain `pytest`.
 - `constitution.md` (repo root) is the authoritative VDD constitution: security constraints and banned patterns live there (e.g. `escape_sql()` mandatory on all `/sql` paths, no silent `except:`, `IF NOT EXISTS` on all DDL). Follow it over this file when they conflict.
+
+## Documentation
+
+`docs/` is the single source of truth. It is served as a site by `mkdocs.yml`
+(`mkdocs build --strict` must pass) and mirrored to the GitHub wiki by
+`scripts/mirror_wiki.py` + `.github/workflows/wiki.yml` on every push that touches `docs/`.
+
+- **Style:** `docs/STYLE.md` — US English, sentence-case H2s, canonical term **sink** (a
+  configured destination) vs **engine** (the database product). Markdown lint is enforced by
+  `markdownlint-cli2` (`.markdownlint-cli2.jsonc`, CI job `markdown`).
+- **Sink guides** live in `docs/sinks/` — one page per sink id (`postgres`, `mysql`,
+  `sqlite`, `mongodb`, `mariadb` shares `mysql.md`, `neo4j`, `clickhouse`, `duckdb`,
+  `surrealdb`). Order everywhere is the documented popularity order in
+  `sinks/registry.py:POPULARITY_ORDER`; no sink is privileged.
+- **Adding a doc:** add it to the `nav` in `mkdocs.yml` *and* to `SECTIONS` in
+  `scripts/mirror_wiki.py`; `tests/test_docs_consistency.py` fails otherwise.
+- **Link style:** relative links inside `docs/`; absolute URLs only for files outside
+  `docs_dir` (README, CONTRIBUTING, LICENSE, `examples/`).
+- **Community files:** `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `SUPPORT.md`,
+  `GOVERNANCE.md`, `CODE_OF_CONDUCT.md`, `.github/PULL_REQUEST_TEMPLATE.md`,
+  `.github/ISSUE_TEMPLATE/`, `.github/FUNDING.yml` — all follow `docs/STYLE.md`.
