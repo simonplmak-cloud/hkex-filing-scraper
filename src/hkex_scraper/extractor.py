@@ -22,34 +22,40 @@ from .utils import log, squash_ws
 # ---------------------------------------------------------------------------
 try:
     import pymupdf  # type: ignore  # pip install PyMuPDF
+
     PYMUPDF_AVAILABLE = True
 except ImportError:
     try:
         import fitz as pymupdf  # type: ignore  # older PyMuPDF
+
         PYMUPDF_AVAILABLE = True
     except ImportError:
         PYMUPDF_AVAILABLE = False
 
 try:
     import pymupdf4llm  # type: ignore  # pip install pymupdf4llm
+
     PYMUPDF4LLM_AVAILABLE = True
 except ImportError:
     PYMUPDF4LLM_AVAILABLE = False
 
 try:
     import camelot  # type: ignore  # pip install camelot-py[cv]
+
     CAMELOT_AVAILABLE = True
 except ImportError:
     CAMELOT_AVAILABLE = False
 
 try:
     from bs4 import BeautifulSoup, Tag  # type: ignore  # pip install beautifulsoup4
+
     BS4_AVAILABLE = True
 except ImportError:
     BS4_AVAILABLE = False
 
 try:
     import openpyxl  # type: ignore  # pip install openpyxl
+
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False
@@ -58,20 +64,29 @@ except ImportError:
 def check_dependencies() -> None:
     """Print warnings for missing optional extraction libraries."""
     if not PYMUPDF_AVAILABLE:
-        print("WARNING: PyMuPDF not installed. PDF text extraction disabled. "
-              "Run: pip install PyMuPDF")
+        print(
+            "WARNING: PyMuPDF not installed. PDF text extraction disabled. Run: pip install PyMuPDF"
+        )
     if not PYMUPDF4LLM_AVAILABLE:
-        print("WARNING: pymupdf4llm not installed. PDF Markdown extraction degraded. "
-              "Run: pip install pymupdf4llm")
+        print(
+            "WARNING: pymupdf4llm not installed. PDF Markdown extraction degraded. "
+            "Run: pip install pymupdf4llm"
+        )
     if not CAMELOT_AVAILABLE:
-        print("WARNING: camelot-py not installed. PDF table extraction degraded "
-              "(merged cells may be duplicated). Run: pip install camelot-py[cv]")
+        print(
+            "WARNING: camelot-py not installed. PDF table extraction degraded "
+            "(merged cells may be duplicated). Run: pip install camelot-py[cv]"
+        )
     if not BS4_AVAILABLE:
-        print("WARNING: beautifulsoup4 not installed. HTML text extraction disabled. "
-              "Run: pip install beautifulsoup4")
+        print(
+            "WARNING: beautifulsoup4 not installed. HTML text extraction disabled. "
+            "Run: pip install beautifulsoup4"
+        )
     if not OPENPYXL_AVAILABLE:
-        print("WARNING: openpyxl not installed. Excel text extraction disabled. "
-              "Run: pip install openpyxl")
+        print(
+            "WARNING: openpyxl not installed. Excel text extraction disabled. "
+            "Run: pip install openpyxl"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +152,7 @@ def _clean_markdown(text: str) -> str:
 # Markdown table helper (for HTML and Excel extractors)
 # ---------------------------------------------------------------------------
 
+
 def _table_to_markdown(headers: list, rows: list) -> str:
     """Convert a list of headers and rows into a Markdown table string."""
     if not headers and not rows:
@@ -180,21 +196,21 @@ def _extract_tables_from_md(md_text: str) -> List[dict]:
                 table_index += 1
                 header_line = table_lines[0]
                 # Parse headers from first row
-                headers = [
-                    cell.strip()
-                    for cell in header_line.strip("|").split("|")
-                ]
+                headers = [cell.strip() for cell in header_line.strip("|").split("|")]
                 # Count data rows (skip header and separator)
                 data_rows = [
-                    ln for ln in table_lines[2:]
+                    ln
+                    for ln in table_lines[2:]
                     if ln.strip() and not re.match(r"^\|[\s\-:|]+\|$", ln.strip())
                 ]
-                tables.append({
-                    "tableIndex": table_index,
-                    "headers": headers,
-                    "rowCount": len(data_rows),
-                    "markdown": "\n".join(table_lines),
-                })
+                tables.append(
+                    {
+                        "tableIndex": table_index,
+                        "headers": headers,
+                        "rowCount": len(data_rows),
+                        "markdown": "\n".join(table_lines),
+                    }
+                )
         else:
             i += 1
 
@@ -204,6 +220,7 @@ def _extract_tables_from_md(md_text: str) -> List[dict]:
 # ---------------------------------------------------------------------------
 # Camelot-based PDF table extraction (handles merged cells correctly)
 # ---------------------------------------------------------------------------
+
 
 def _extract_tables_with_camelot(raw_bytes: bytes) -> List[dict]:
     """Extract tables from PDF bytes using camelot-py lattice mode.
@@ -258,14 +275,16 @@ def _extract_tables_with_camelot(raw_bytes: bytes) -> List[dict]:
             # Build Markdown table
             md = _table_to_markdown(headers, data_rows)
 
-            result.append({
-                "tableIndex": idx,
-                "page": tbl.page,
-                "headers": headers,
-                "rowCount": len(data_rows),
-                "accuracy": round(tbl.accuracy, 1),
-                "markdown": md,
-            })
+            result.append(
+                {
+                    "tableIndex": idx,
+                    "page": tbl.page,
+                    "headers": headers,
+                    "rowCount": len(data_rows),
+                    "accuracy": round(tbl.accuracy, 1),
+                    "markdown": md,
+                }
+            )
 
         return result
 
@@ -282,6 +301,7 @@ def _extract_tables_with_camelot(raw_bytes: bytes) -> List[dict]:
 # ---------------------------------------------------------------------------
 # Table substitution: replace pymupdf4llm inline tables with camelot tables
 # ---------------------------------------------------------------------------
+
 
 def _strip_md_tables(md_text: str) -> Tuple[str, List[int]]:
     """Remove all Markdown tables from text, returning cleaned text and
@@ -347,7 +367,6 @@ def _substitute_tables(md_text: str, camelot_tables: List[dict]) -> str:
     lines = stripped_text.split("\n")
     result_lines: List[str] = []
     camelot_idx = 0
-    i = 0
     pos_set = set()
 
     # Map positions back to line numbers
@@ -380,6 +399,7 @@ def _substitute_tables(md_text: str, camelot_tables: List[dict]) -> str:
 # ---------------------------------------------------------------------------
 # PDF extraction (pymupdf4llm for text + camelot for tables)
 # ---------------------------------------------------------------------------
+
 
 def extract_pdf_content(raw_bytes: bytes) -> Tuple[str, list]:
     """Extract text and structured tables from PDF bytes as clean Markdown.
@@ -421,20 +441,24 @@ def extract_pdf_content(raw_bytes: bytes) -> Tuple[str, list]:
         tables_json = _extract_tables_with_camelot(raw_bytes)
 
         if tables_json:
-            log(f"    Using {len(tables_json)} camelot tables "
-                f"(accuracy: {', '.join(str(t['accuracy']) + '%' for t in tables_json)})")
+            log(
+                f"    Using {len(tables_json)} camelot tables "
+                f"(accuracy: {', '.join(str(t['accuracy']) + '%' for t in tables_json)})"
+            )
             # Substitute pymupdf4llm inline tables with cleaner camelot tables
             md_text = _substitute_tables(md_text, tables_json)
             md_text = _clean_markdown(md_text)  # Re-clean after substitution
-            log(f"    Substituted inline tables with camelot output")
+            log("    Substituted inline tables with camelot output")
         else:
             # Fallback: extract table metadata from pymupdf4llm Markdown
             tables_json = _extract_tables_from_md(md_text)
             if tables_json:
-                log(f"    Camelot unavailable/empty, using {len(tables_json)} "
-                    f"pymupdf4llm inline tables (may have merged-cell artifacts)")
+                log(
+                    f"    Camelot unavailable/empty, using {len(tables_json)} "
+                    f"pymupdf4llm inline tables (may have merged-cell artifacts)"
+                )
             else:
-                log(f"    No tables found in PDF")
+                log("    No tables found in PDF")
 
         return md_text, tables_json
 
@@ -446,6 +470,7 @@ def extract_pdf_content(raw_bytes: bytes) -> Tuple[str, list]:
 # ---------------------------------------------------------------------------
 # HTML extraction (preserving heading structure)
 # ---------------------------------------------------------------------------
+
 
 def extract_html_content(raw_bytes: bytes) -> Tuple[str, list]:
     """Extract text and tables from HTML bytes as clean Markdown.
@@ -534,12 +559,14 @@ def extract_html_content(raw_bytes: bytes) -> Tuple[str, list]:
                     md = _table_to_markdown(headers, rows_data)
                     if md:
                         md_parts.append(f"\n\n{md}\n")
-                        tables_json.append({
-                            "tableIndex": table_index,
-                            "headers": headers,
-                            "rowCount": len(rows_data),
-                            "markdown": md,
-                        })
+                        tables_json.append(
+                            {
+                                "tableIndex": table_index,
+                                "headers": headers,
+                                "rowCount": len(rows_data),
+                                "markdown": md,
+                            }
+                        )
                 elif headers:
                     text = " | ".join(c for c in headers if c.strip())
                     if text:
@@ -547,14 +574,34 @@ def extract_html_content(raw_bytes: bytes) -> Tuple[str, list]:
                 return
 
             # Container elements -> recurse into children
-            if tag in ("div", "span", "td", "th", "tr", "tbody", "thead",
-                       "tfoot", "section", "article", "main", "aside",
-                       "ul", "ol", "dl", "dd", "dt", "figure",
-                       "figcaption", "blockquote", "form", "fieldset"):
+            if tag in (
+                "div",
+                "span",
+                "td",
+                "th",
+                "tr",
+                "tbody",
+                "thead",
+                "tfoot",
+                "section",
+                "article",
+                "main",
+                "aside",
+                "ul",
+                "ol",
+                "dl",
+                "dd",
+                "dt",
+                "figure",
+                "figcaption",
+                "blockquote",
+                "form",
+                "fieldset",
+            ):
                 for child in el.children:
                     if isinstance(child, Tag):
                         _process_element(child)
-                    elif hasattr(child, 'string') and child.string:
+                    elif hasattr(child, "string") and child.string:
                         text = child.string.strip()
                         if text:
                             md_parts.append(f" {text}")
@@ -585,6 +632,7 @@ def extract_html_content(raw_bytes: bytes) -> Tuple[str, list]:
 # Excel extraction (structured Markdown with sheet headings and tables)
 # ---------------------------------------------------------------------------
 
+
 def extract_excel_content(raw_bytes: bytes) -> Tuple[str, list]:
     """Extract text and tables from Excel bytes as clean Markdown.
 
@@ -598,9 +646,7 @@ def extract_excel_content(raw_bytes: bytes) -> Tuple[str, list]:
     tables_json: list = []
     all_parts: list = []
     try:
-        wb = openpyxl.load_workbook(
-            io.BytesIO(raw_bytes), read_only=True, data_only=True
-        )
+        wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
         for sheet_idx, sheet_name in enumerate(wb.sheetnames, start=1):
             ws = wb[sheet_name]
             rows_data: list = []
@@ -635,24 +681,28 @@ def extract_excel_content(raw_bytes: bytes) -> Tuple[str, list]:
                     val = squash_ws(row[1]) if len(row) > 1 else ""
                     kv_lines.append(f"{key} | {val}")
                 sheet_md += "\n".join(kv_lines)
-                tables_json.append({
-                    "tableIndex": sheet_idx,
-                    "sheetName": sheet_name,
-                    "headers": [label_h, value_h],
-                    "rowCount": len(data_rows),
-                    "markdown": "\n".join(kv_lines),
-                })
+                tables_json.append(
+                    {
+                        "tableIndex": sheet_idx,
+                        "sheetName": sheet_name,
+                        "headers": [label_h, value_h],
+                        "rowCount": len(data_rows),
+                        "markdown": "\n".join(kv_lines),
+                    }
+                )
             else:
                 md = _table_to_markdown(headers, data_rows)
                 if md:
                     sheet_md += md
-                    tables_json.append({
-                        "tableIndex": sheet_idx,
-                        "sheetName": sheet_name,
-                        "headers": [squash_ws(str(h)) for h in headers],
-                        "rowCount": len(data_rows),
-                        "markdown": md,
-                    })
+                    tables_json.append(
+                        {
+                            "tableIndex": sheet_idx,
+                            "sheetName": sheet_name,
+                            "headers": [squash_ws(str(h)) for h in headers],
+                            "rowCount": len(data_rows),
+                            "markdown": md,
+                        }
+                    )
 
             all_parts.append(sheet_md)
 
@@ -669,9 +719,8 @@ def extract_excel_content(raw_bytes: bytes) -> Tuple[str, list]:
 # Router
 # ---------------------------------------------------------------------------
 
-def extract_content_with_tables(
-    raw_bytes: bytes, doc_url: str
-) -> Tuple[str, list]:
+
+def extract_content_with_tables(raw_bytes: bytes, doc_url: str) -> Tuple[str, list]:
     """Route to the appropriate extractor based on file extension."""
     u = doc_url.lower().split("?")[0].split("#")[0]
     if u.endswith(".pdf"):

@@ -108,12 +108,6 @@ class TestCompanyIdNormalization:
         assert _normalize_company_id("eodhd_company:2378_HK") == "2378_HK"
 
     def test_ticker_and_db_id_match(self):
-        assert _ticker_to_record_id("0001.HK") == _normalize_company_id(
-            "eodhd_company:0001_HK"
-        )
-        assert _ticker_to_record_id("000426.HK") == _normalize_company_id(
-            "eodhd_company:000426_HK"
-        )
-        assert _ticker_to_record_id("2378.HK") == _normalize_company_id(
-            "eodhd_company:2378_HK"
-        )
+        assert _ticker_to_record_id("0001.HK") == _normalize_company_id("eodhd_company:0001_HK")
+        assert _ticker_to_record_id("000426.HK") == _normalize_company_id("eodhd_company:000426_HK")
+        assert _ticker_to_record_id("2378.HK") == _normalize_company_id("eodhd_company:2378_HK")

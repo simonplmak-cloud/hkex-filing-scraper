@@ -5,22 +5,20 @@ from __future__ import annotations
 import re
 from calendar import monthrange
 from datetime import datetime
-from typing import List, Tuple
+from importlib.util import find_spec
+from typing import List, Optional, Tuple
 
 from .config import HKEX_API_ENDPOINT, HKEX_BASE_URL, HKEX_SEARCH_PAGE
-from .utils import log, squash_ws
+from .utils import squash_ws
 
 # ---------------------------------------------------------------------------
 # Optional dependencies
 # ---------------------------------------------------------------------------
-try:
-    import requests as _requests  # type: ignore
-    REQUESTS_AVAILABLE = True
-except ImportError:
-    REQUESTS_AVAILABLE = False
+REQUESTS_AVAILABLE = find_spec("requests") is not None
 
 try:
     from bs4 import BeautifulSoup  # type: ignore
+
     _BS4_AVAILABLE = True
 except ImportError:
     _BS4_AVAILABLE = False
@@ -28,6 +26,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Record parsing
 # ---------------------------------------------------------------------------
+
 
 def _parse_api_record(record: dict) -> dict:
     """Convert a raw HKEx API JSON record into our internal filing format.
@@ -76,6 +75,7 @@ def _parse_api_record(record: dict) -> dict:
 # HTML fallback parser (for initial page)
 # ---------------------------------------------------------------------------
 
+
 def _parse_initial_page_html(html: str) -> Tuple[list, int]:
     """Parse the initial HKEx search page HTML to extract the first ~100 filings."""
     if not _BS4_AVAILABLE:
@@ -123,6 +123,7 @@ def _parse_initial_page_html(html: str) -> Tuple[list, int]:
 # Monthly chunking
 # ---------------------------------------------------------------------------
 
+
 def generate_monthly_chunks(
     date_from: datetime, date_to: datetime
 ) -> List[Tuple[datetime, datetime]]:
@@ -148,12 +149,13 @@ def generate_monthly_chunks(
 # API fetch (single chunk)
 # ---------------------------------------------------------------------------
 
+
 def fetch_chunk_via_api(
     session,
     date_from_yyyymmdd: str,
     date_to_yyyymmdd: str,
     max_records: int = 0,
-) -> list:
+) -> Tuple[list, Optional[int]]:
     """Fetch all filings for a date range chunk using the HKEx JSON API.
 
     Steps:
@@ -189,18 +191,12 @@ def fetch_chunk_via_api(
         form_el = soup.find("form")
         form_action = form_el.get("action", "") if form_el else ""
     else:
-        vs_match = re.search(
-            r'javax\.faces\.ViewState.*?value="([^"]+)"', page_resp.text
-        )
+        vs_match = re.search(r'javax\.faces\.ViewState.*?value="([^"]+)"', page_resp.text)
         view_state = vs_match.group(1) if vs_match else ""
         fa_match = re.search(r'<form[^>]*action="([^"]+)"', page_resp.text)
         form_action = fa_match.group(1) if fa_match else ""
 
-    submit_url = (
-        f"{HKEX_BASE_URL}{form_action}"
-        if form_action.startswith("/")
-        else form_action
-    )
+    submit_url = f"{HKEX_BASE_URL}{form_action}" if form_action.startswith("/") else form_action
     session.post(
         submit_url,
         data={
@@ -275,4 +271,4 @@ def fetch_chunk_via_api(
         if api_total and fetched >= api_total:
             break
 
-    return all_records
+    return all_records, api_total

@@ -24,6 +24,7 @@ from .utils import log
 # Auth
 # ---------------------------------------------------------------------------
 
+
 def _get_auth_header() -> str:
     creds = f"{SURREAL_USER}:{SURREAL_PASS}".encode()
     return base64.b64encode(creds).decode()
@@ -32,6 +33,7 @@ def _get_auth_header() -> str:
 # ---------------------------------------------------------------------------
 # Query
 # ---------------------------------------------------------------------------
+
 
 def surreal_query(sql: str, timeout: int = 120) -> dict:
     """Send SurrealQL to the ``/sql`` endpoint. Returns parsed JSON response."""
@@ -115,9 +117,8 @@ def surreal_rpc(method: str, params: list, timeout: int = 120) -> dict:
 # Batch upsert with binary-split retry
 # ---------------------------------------------------------------------------
 
-def upsert_batch_with_retry(
-    statements: List[str], depth: int = 0, max_depth: int = 6
-) -> int:
+
+def upsert_batch_with_retry(statements: List[str], depth: int = 0, max_depth: int = 6) -> int:
     """UPSERT a list of SurrealQL statements in one request.
 
     On error the batch is split in half and retried recursively.
@@ -133,11 +134,7 @@ def upsert_batch_with_retry(
             try:
                 LOG_DIR.mkdir(exist_ok=True)
                 with open(LOG_DIR / "hkex_failed.sql", "a", encoding="utf-8") as fh:
-                    fh.write(
-                        "-- FAILED @ "
-                        + datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        + "\n"
-                    )
+                    fh.write("-- FAILED @ " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
                     fh.write("-- " + err_txt.replace("\n", " ")[:500] + "\n")
                     fh.write(statements[0] + "\n\n")
             except Exception:
@@ -153,6 +150,7 @@ def upsert_batch_with_retry(
 # ---------------------------------------------------------------------------
 # Schema initialisation
 # ---------------------------------------------------------------------------
+
 
 def _build_schema_sql() -> str:
     """Return the full schema DDL, dynamically including graph edges if COMPANY_TABLE is set."""
@@ -205,6 +203,22 @@ DEFINE INDEX IF NOT EXISTS idx_ef_source    ON TABLE exchange_filing COLUMNS sou
 DEFINE INDEX IF NOT EXISTS idx_ef_docstatus ON TABLE exchange_filing COLUMNS documentStatus;
 DEFINE INDEX IF NOT EXISTS idx_ef_category  ON TABLE exchange_filing COLUMNS filingCategory;
 """
+
+    base += """
+-- Coverage tracking table (pipeline operational data)
+DEFINE TABLE IF NOT EXISTS scrape_coverage SCHEMAFULL;
+
+DEFINE FIELD IF NOT EXISTS chunkFrom     ON TABLE scrape_coverage TYPE datetime;
+DEFINE FIELD IF NOT EXISTS chunkTo       ON TABLE scrape_coverage TYPE datetime;
+DEFINE FIELD IF NOT EXISTS apiCount      ON TABLE scrape_coverage TYPE int;
+DEFINE FIELD IF NOT EXISTS ingestedCount ON TABLE scrape_coverage TYPE int;
+DEFINE FIELD IF NOT EXISTS uniqueCount   ON TABLE scrape_coverage TYPE int;
+DEFINE FIELD IF NOT EXISTS runId         ON TABLE scrape_coverage TYPE string;
+DEFINE FIELD IF NOT EXISTS timestamp     ON TABLE scrape_coverage TYPE datetime;
+
+DEFINE INDEX IF NOT EXISTS idx_cov_chunk ON TABLE scrape_coverage COLUMNS chunkFrom, chunkTo;
+DEFINE INDEX IF NOT EXISTS idx_cov_run   ON TABLE scrape_coverage COLUMNS runId;
+"""
     if COMPANY_TABLE:
         base += f"""
 -- Edge table: company -> filing (graph relation)
@@ -245,8 +259,7 @@ def initialize_schema() -> bool:
     )
     if isinstance(mig_result, dict) and mig_result.get("error"):
         log(
-            f"  Migration note: could not remove documentContent field: "
-            f"{mig_result['error'][:200]}"
+            f"  Migration note: could not remove documentContent field: {mig_result['error'][:200]}"
         )
     else:
         log("  Migration: documentContent field removed (no longer storing blobs)")

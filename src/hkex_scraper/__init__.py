@@ -1,3 +1,3 @@
-"""HKEx Filing Scraper — Scrape and ingest HKEx regulatory filings into SurrealDB."""
+"""HKEx Filing Scraper — scrape HKEx regulatory filings into SurrealDB and/or PostgreSQL."""
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"

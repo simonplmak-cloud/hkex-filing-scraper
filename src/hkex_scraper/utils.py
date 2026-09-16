@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 from datetime import datetime
 from typing import List, Tuple
@@ -170,9 +169,7 @@ def extract_referenced_tickers(title: str, own_stock_code: str) -> List[str]:
     referenced: set[str] = set()
     own_normalized = own_stock_code.lstrip("0") or "0"
 
-    for m in re.finditer(
-        r"stock\s*code[s]?[:\s]+((?:\d{3,5}[,\s]*)+)", title, re.IGNORECASE
-    ):
+    for m in re.finditer(r"stock\s*code[s]?[:\s]+((?:\d{3,5}[,\s]*)+)", title, re.IGNORECASE):
         for code in re.findall(r"\d{3,5}", m.group(1)):
             referenced.add(code)
 
