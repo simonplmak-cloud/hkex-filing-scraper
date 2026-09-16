@@ -6,7 +6,7 @@ import argparse
 import sys
 from datetime import datetime
 
-from . import config, db_postgres
+from . import __version__, config, db_postgres
 from .config import LOG_DIR, MAX_DOWNLOAD_WORKERS, SURREAL_ENDPOINT, SURREAL_PASS
 from .db import initialize_schema, surreal_query
 from .extractor import check_dependencies
@@ -159,6 +159,11 @@ def _build_parser() -> argparse.ArgumentParser:
             "pipeline runs by default: metadata scrape, document download, text "
             "extraction, and graph linking."
         ),
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
         "--full-history",
