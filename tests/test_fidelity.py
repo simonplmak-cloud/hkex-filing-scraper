@@ -13,8 +13,9 @@ import re
 
 from hkex_scraper import db, db_postgres, pipeline
 from hkex_scraper.sinks import clickhouse, dialects, mongodb, neo4j
+from hkex_scraper.sinks import duckdb as duckdb_module
+from hkex_scraper.sinks import sqlite as sqlite_module
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 RELATIONAL_DIALECTS = [
     dialects.PostgresDialect(),
@@ -79,13 +80,13 @@ class TestEngineSafeguards:
                 assert "utf8mb4" in statement, f"{dialect.id} DDL is not utf8mb4: {statement[:80]}"
 
     def test_sqlite_enables_wal_and_a_busy_timeout(self):
-        source = pathlib.Path(ROOT / "src/hkex_scraper/sinks/sqlite.py").read_text(encoding="utf-8")
+        source = pathlib.Path(sqlite_module.__file__).read_text(encoding="utf-8")
         assert "PRAGMA journal_mode = WAL" in source
         assert "PRAGMA busy_timeout" in source
         assert "timeout=BUSY_TIMEOUT_SECONDS" in source
 
     def test_duckdb_retries_transaction_conflicts(self):
-        source = pathlib.Path(ROOT / "src/hkex_scraper/sinks/duckdb.py").read_text(encoding="utf-8")
+        source = pathlib.Path(duckdb_module.__file__).read_text(encoding="utf-8")
         assert "CONFLICT_RETRIES" in source
         assert "_is_conflict" in source
 

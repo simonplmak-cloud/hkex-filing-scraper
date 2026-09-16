@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Quality gates.** A coverage gate (`fail_under`, branch coverage, ratcheting upward only),
+  property-based tests with Hypothesis over the pure logic, pre-commit hooks (ruff plus
+  hygiene checks) enforced in CI, and a job that installs the built wheel into a clean
+  environment and runs the suite against it from outside the source tree.
+- Tests are now offline by default: `tests/conftest.py` blocks non-loopback connections and a
+  `network` marker documents the exception.
+- Hypothesis immediately found and fixed a latent chunking bug: `generate_monthly_chunks`
+  could return a chunk whose end preceded its start when the range carried a time component.
+
 - Accessibility: a small script names Material's search toggle and makes its scrollable table
   wrappers keyboard reachable, and prose links are now always underlined so colour is never the
   only cue. Together these clear every axe violation (WCAG 2.0/2.1/2.2 A+AA) on the live site.
