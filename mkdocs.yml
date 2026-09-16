@@ -24,6 +24,9 @@ theme:
     - search.suggest
 extra_css:
   - assets/stylesheets/terminal.css
+extra_javascript:
+  # Gives Material's unlabelled search toggle an accessible name (WCAG 2.2, axe `label`).
+  - assets/javascripts/a11y.js
 markdown_extensions:
   - admonition
   - tables
