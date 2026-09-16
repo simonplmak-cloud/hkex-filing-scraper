@@ -180,6 +180,7 @@ DEFINE FIELD IF NOT EXISTS referencedTickers ON TABLE exchange_filing TYPE optio
 DEFINE FIELD IF NOT EXISTS documentSize         ON TABLE exchange_filing TYPE option<int>;
 DEFINE FIELD IF NOT EXISTS documentType         ON TABLE exchange_filing TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS documentHash         ON TABLE exchange_filing TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS documentSha256       ON TABLE exchange_filing TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS documentText         ON TABLE exchange_filing TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS documentTextLen      ON TABLE exchange_filing TYPE option<int>;
 DEFINE FIELD IF NOT EXISTS documentTables       ON TABLE exchange_filing TYPE option<array<object>>;

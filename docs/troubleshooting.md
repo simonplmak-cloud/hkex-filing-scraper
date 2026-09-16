@@ -58,7 +58,9 @@ Check credentials, or create the database: `CREATE DATABASE hkex CHARACTER SET u
 Set `SQLITE_PATH` to a writable file path, or `:memory:`.
 
 **`database is locked`**
-SQLite serialises writers. Ensure a single scraper process writes a given database file.
+SQLite serialises writers, so the sink enables WAL mode and a 30 s busy timeout. Two
+*processes* writing the same file can still contend — point each run at its own file, or use a
+server-backed sink for concurrent writers.
 
 ## SurrealDB
 

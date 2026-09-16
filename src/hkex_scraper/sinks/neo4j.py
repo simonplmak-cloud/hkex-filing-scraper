@@ -190,6 +190,7 @@ class Neo4jSink(Sink):
         query = (
             "MATCH (f:Filing {filingId: $fid}) "
             "SET f.documentSize = $size, f.documentType = $dtype, f.documentHash = $hash, "
+            "    f.documentSha256 = $sha256, "
             "    f.documentText = $text, f.documentTextLen = $text_len, "
             "    f.documentTables = $tables, f.documentTableCnt = $table_cnt, "
             "    f.documentStatus = $status, f.documentStatusReason = $reason, "
@@ -201,6 +202,7 @@ class Neo4jSink(Sink):
             "size": payload.get("document_size"),
             "dtype": payload.get("document_type"),
             "hash": payload.get("document_hash"),
+            "sha256": payload.get("document_sha256"),
             "text": payload.get("document_text"),
             "text_len": payload.get("document_text_len"),
             "tables": json.dumps(payload.get("document_tables") or [], ensure_ascii=False),

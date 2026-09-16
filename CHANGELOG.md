@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Data-fidelity guarantees across every sink.** Documents now carry a `document_sha256`
+  integrity hash alongside the MD5 identity hash (SurrealDB, PostgreSQL, MySQL/MariaDB, SQLite,
+  DuckDB, MongoDB, ClickHouse, Neo4j), mirrored in every schema and the PostgreSQL/relational
+  upserts.
+- Engine safeguards made explicit: SQLite runs in WAL mode with a 30 s busy timeout, DuckDB
+  retries optimistic transaction conflicts, ClickHouse pins `ReplacingMergeTree(updated_at)`
+  with `ORDER BY filing_id` and `FINAL` reads, and Neo4j keeps uniqueness constraints on the
+  filing and company ids.
+- `tests/test_fidelity.py` asserts all of the above, plus utf8mb4 MySQL tables and UTC-aware
+  timestamps. `pipeline.document_payload()` is now a pure, testable function.
+
 - **HTTP resilience.** A shared `requests` session now retries connection errors and transient
   statuses (408/429/5xx) up to 4 times with exponential backoff and jitter, honours
   `Retry-After`, and never replays the non-idempotent JSF `POST`. Phase 2 downloads use the same

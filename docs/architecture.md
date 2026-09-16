@@ -72,6 +72,13 @@ flowchart TD
 
 ## Data fidelity
 
+- Every document carries two hashes: `documentHash` (MD5, identity/dedup only) and
+  `documentSha256`/`document_sha256` (integrity, comparable across sinks).
+- Embedded engines are configured for their known failure modes: SQLite runs in WAL mode
+  with a busy timeout, and DuckDB retries optimistic transaction conflicts.
+- ClickHouse deduplicates via `ReplacingMergeTree(updated_at) ORDER BY filing_id` and reads
+  with `FINAL`; Neo4j enforces uniqueness on the filing and company ids.
+- Timestamps are stored UTC-aware (`timestamptz`, `datetime(6)`, ISO-8601 text, …).
 - Text and tables are extracted once into one canonical payload; each sink applies its own
   declared limit (for example, the SurrealDB adapter truncates to fit its RPC body size,
   while the relational sinks store the text column unchanged).
