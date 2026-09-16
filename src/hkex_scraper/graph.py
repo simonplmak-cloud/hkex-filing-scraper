@@ -36,12 +36,28 @@ def _normalize_company_id(full_id: str) -> str:
 
 def _load_company_ids() -> dict[str, str]:
     """Fetch all record IDs from the configured company table.
-    Returns a dict mapping normalized key → actual DB record ID.
+
+    Returns a dict mapping normalized key → actual DB record ID. A missing or
+    unreadable company table is logged and treated as an empty set (graph
+    linking is skipped) rather than crashing the pipeline.
     """
     company_ids: dict[str, str] = {}
     comp_result = surreal_query(f"SELECT id FROM {COMPANY_TABLE};", timeout=60)
+    if isinstance(comp_result, dict) and comp_result.get("error"):
+        log(f"  Could not load company IDs: {str(comp_result['error'])[:200]}")
+        return company_ids
     if isinstance(comp_result, list) and len(comp_result) > 0:
-        for c in comp_result[0].get("result", []):
+        entry = comp_result[0]
+        rows = entry.get("result", []) if isinstance(entry, dict) else []
+        if not isinstance(rows, list):
+            log(
+                f"  Could not read company table '{COMPANY_TABLE}': "
+                f"{str(rows)[:200]} (graph linking skipped)"
+            )
+            return company_ids
+        for c in rows:
+            if not isinstance(c, dict):
+                continue
             cid = str(c.get("id", ""))
             if cid:
                 company_ids[_normalize_company_id(cid)] = cid
@@ -178,6 +194,8 @@ def link_filings_to_companies(ticker_set: set | None = None) -> int:
             r = count_result[0].get("result", [])
             if r and len(r) > 0:
                 total = r[0].get("count", 0)
+    elif config.postgres_enabled():
+        total, _code = db_postgres.count_edges("has_filing")
     log(f"  Total has_filing edges: {total}")
     return total
 

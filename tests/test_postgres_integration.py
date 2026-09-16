@@ -122,6 +122,10 @@ def test_edge_upsert_reports_created_excluding_conflicts():
     )
     assert code == "" and rows[0]["n"] == 1
 
+    total, code = db_postgres.count_edges("has_filing")
+    assert code == ""
+    assert total >= 1
+
 
 def test_coverage_upsert_is_idempotent():
     run_id = "it-" + uuid.uuid4().hex[:8]

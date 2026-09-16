@@ -111,3 +111,36 @@ class TestCompanyIdNormalization:
         assert _ticker_to_record_id("0001.HK") == _normalize_company_id("eodhd_company:0001_HK")
         assert _ticker_to_record_id("000426.HK") == _normalize_company_id("eodhd_company:000426_HK")
         assert _ticker_to_record_id("2378.HK") == _normalize_company_id("eodhd_company:2378_HK")
+
+
+class TestLoadCompanyIds:
+    def test_missing_table_returns_empty(self, monkeypatch):
+        from hkex_scraper import graph
+
+        monkeypatch.setattr(graph, "COMPANY_TABLE", "company", raising=False)
+        monkeypatch.setattr(
+            graph,
+            "surreal_query",
+            lambda sql, timeout=60: [
+                {"status": "ERR", "result": "The table 'company' does not exist"}
+            ],
+        )
+        assert graph._load_company_ids() == {}
+
+    def test_error_dict_returns_empty(self, monkeypatch):
+        from hkex_scraper import graph
+
+        monkeypatch.setattr(graph, "COMPANY_TABLE", "company", raising=False)
+        monkeypatch.setattr(graph, "surreal_query", lambda sql, timeout=60: {"error": "boom"})
+        assert graph._load_company_ids() == {}
+
+    def test_parses_record_ids(self, monkeypatch):
+        from hkex_scraper import graph
+
+        monkeypatch.setattr(graph, "COMPANY_TABLE", "company", raising=False)
+        monkeypatch.setattr(
+            graph,
+            "surreal_query",
+            lambda sql, timeout=60: [{"status": "OK", "result": [{"id": "company:0001_HK"}]}],
+        )
+        assert graph._load_company_ids() == {"1_HK": "company:0001_HK"}

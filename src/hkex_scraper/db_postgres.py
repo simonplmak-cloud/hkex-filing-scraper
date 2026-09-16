@@ -581,6 +581,23 @@ def count_filings() -> Tuple[int, str]:
         return 0, ERR_WRITE_ERROR
 
 
+_EDGE_TABLES = {"has_filing": "has_filing", "references_filing": "references_filing"}
+
+
+def count_edges(kind: str) -> Tuple[int, str]:
+    """Return the number of rows in an edge table as ``(count, error_code)``."""
+    table = _EDGE_TABLES.get(kind)
+    if not table:
+        return 0, ERR_PAYLOAD_ERROR
+    value, code = _fetch_scalar(f"SELECT count(*) FROM {table}")
+    if code:
+        return 0, code
+    try:
+        return int(value or 0), ERR_NONE
+    except (TypeError, ValueError):
+        return 0, ERR_WRITE_ERROR
+
+
 # ---------------------------------------------------------------------------
 # Read helpers (used when PostgreSQL is the operational store)
 # ---------------------------------------------------------------------------

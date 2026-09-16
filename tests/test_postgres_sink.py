@@ -206,6 +206,12 @@ class TestUpsertEdges:
         assert created == 0
         assert code == db_postgres.ERR_PAYLOAD_ERROR
 
+    def test_count_edges_unknown_kind_is_payload_error(self):
+        # Validated before any database access, so no driver is needed.
+        count, code = db_postgres.count_edges("bogus")
+        assert count == 0
+        assert code == db_postgres.ERR_PAYLOAD_ERROR
+
 
 # ---------------------------------------------------------------------------
 # AC-7 / AC-E2: graceful degradation
