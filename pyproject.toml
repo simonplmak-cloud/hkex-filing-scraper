@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "hkex-filing-scraper"
-version = "1.1.0"
+dynamic = ["version"]
 description = "Scrape and ingest HKEx (Hong Kong Stock Exchange) regulatory filings into SurrealDB and/or PostgreSQL with full-text extraction and graph linking."
 readme = "README.md"
 license = { text = "MIT" }
@@ -59,6 +59,12 @@ Issues = "https://github.com/simonplmak-cloud/hkex-filing-scraper/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hkex_scraper"]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/hkex_scraper/_version.py"
 
 [tool.ruff]
 target-version = "py310"
