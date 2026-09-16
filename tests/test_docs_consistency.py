@@ -22,10 +22,11 @@ def _read(rel: str) -> str:
     return (ROOT / rel).read_text(encoding="utf-8")
 
 
-# Sinks whose primary guide lives outside docs/backends/.
+# Sinks whose primary guide lives elsewhere (shared or top-level).
 GUIDE_OVERRIDES = {
     "postgres": "docs/postgresql.md",
     "surrealdb": "docs/architecture.md",
+    "mariadb": "docs/backends/mysql.md",  # mysql.md documents both engines
 }
 
 
