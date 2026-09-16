@@ -1,0 +1,71 @@
+name: Bug report
+description: Report a reproducible problem with the scraper
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please do not include credentials or `.env` contents.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands and configuration (redact secrets).
+      placeholder: |
+        1. DATABASE_TARGET=...
+        2. hkex-scraper ...
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: sink
+    attributes:
+      label: Database target
+      options:
+        - surrealdb
+        - postgres
+        - both
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `hkex-scraper --version` or the release tag.
+      placeholder: "1.1.0"
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.11.9"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste the relevant lines from `logs/hkex_filings_*.log` (redact secrets).
+      render: shell
+    validations:
+      required: false

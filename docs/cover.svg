@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="420" viewBox="0 0 1000 420"
+     font-family="DejaVu Sans, Segoe UI, Arial, Helvetica, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B1220"/>
+      <stop offset="100%" stop-color="#111C2E"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FF00A0"/>
+      <stop offset="100%" stop-color="#4169E1"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1000" height="420" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1000" height="7" fill="url(#accent)"/>
+
+  <text x="64" y="128" fill="#FFFFFF" font-size="60" font-weight="bold">HKEx Filing Scraper</text>
+  <text x="64" y="180" fill="#C3CEDF" font-size="26">Scrape HKEx regulatory filings into SurrealDB or PostgreSQL.</text>
+
+  <g>
+    <rect x="64" y="228" width="250" height="72" rx="14" fill="#16233A" stroke="#FF00A0" stroke-width="2"/>
+    <text x="189" y="272" fill="#FFFFFF" font-size="26" font-weight="bold" text-anchor="middle">SurrealDB</text>
+  </g>
+  <g>
+    <rect x="336" y="228" width="250" height="72" rx="14" fill="#16233A" stroke="#4169E1" stroke-width="2"/>
+    <text x="461" y="272" fill="#FFFFFF" font-size="26" font-weight="bold" text-anchor="middle">PostgreSQL</text>
+  </g>
+  <text x="620" y="272" fill="#7C8AA5" font-size="26">or both</text>
+
+  <text x="64" y="372" fill="#5F6E85" font-size="22">github.com/simonplmak-cloud/hkex-filing-scraper</text>
+</svg>
