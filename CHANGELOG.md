@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-09-16
 
 ### Added
 
@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-sink capability model (upsert, reads, edges, JSON, arrays, limits) and a support matrix at `docs/backends/README.md`.
 - `docs/adr/0002-multi-sink-architecture.md`, `docs/adr/0003-sink-support-policy.md`, and per-backend guides under `docs/backends/` (mysql, sqlite, duckdb, mongodb, clickhouse, neo4j).
 - CI job `integration-tier2` running MongoDB, ClickHouse, and Neo4j service containers.
+- **MySQL/MariaDB live integration test and CI job** (`integration-mysql`), closing the last sink without live coverage.
+- **`install-matrix` CI job** exercising the documented `pip install .` and `pip install ".[all]"` installs on a clean runner.
+- **Docs-consistency test** (`tests/test_docs_consistency.py`) that fails a PR when a sink is added or renamed without updating the README, CLI reference, configuration reference, issue templates, backend guides, `pyproject` extras, or `.env.example`.
+- Governance/security: Dependabot, CodeQL workflow, secret scan in CI, `CODEOWNERS`, `CITATION.cff`, `.gitattributes`, `.editorconfig`, and a CI secret-scan job.
+- `examples/` — a `docker-compose.yml` with PostgreSQL, MySQL, MariaDB, MongoDB, ClickHouse, Neo4j, and SurrealDB, plus `quickstart.sh` and per-sink connection settings.
+- Docs: `docs/legal.md` (Terms of Use and data responsibilities), `docs/de-risking.md` (risk register), a GitHub Pages docs site (`mkdocs.yml`), and a release **rollback runbook**.
+- Release workflow now also verifies that an optional extra installs from the wheel and registers its sink.
 
 ### Changed
 
@@ -61,5 +68,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Non-breaking: the default sink and all existing CLI flags are unchanged. Dual-write is forward-only — existing SurrealDB data is not migrated to PostgreSQL automatically.
 
-[Unreleased]: https://github.com/simonplmak-cloud/hkex-filing-scraper/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/simonplmak-cloud/hkex-filing-scraper/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/simonplmak-cloud/hkex-filing-scraper/releases/tag/v2.0.0
 [1.1.0]: https://github.com/simonplmak-cloud/hkex-filing-scraper/releases/tag/v1.1.0
