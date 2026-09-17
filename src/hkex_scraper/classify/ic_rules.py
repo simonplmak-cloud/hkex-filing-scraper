@@ -46,7 +46,7 @@ IC_SIGNALS: tuple[ICSignal, ...] = (
             "CHANGE OF AUDITOR",
             "CESSATION OF AUDITOR",
         ),
-        ("核数师辞任", "核数师变更", "更换核数师"),
+        ("核数师辞任", "辞任核数师", "核数师变更", "更换核数师"),
     ),
     ICSignal(
         "late_results_suspension",
