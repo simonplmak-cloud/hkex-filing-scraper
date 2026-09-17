@@ -19,6 +19,10 @@
 [![DuckDB](https://img.shields.io/badge/DuckDB-FFF000?logo=duckdb&logoColor=black)](https://duckdb.org)
 [![SurrealDB](https://img.shields.io/badge/SurrealDB-FF00A0?logo=surrealdb&logoColor=white)](https://surrealdb.com)
 
+**The US has EDGAR full-text search. Japan has EDINET. Hong Kong has a search form that returns
+one page at a time.** There is no bulk, machine-readable, full-text corpus of HKEx filings. This
+builds one.
+
 An open-source Python tool that scrapes 25+ years of Hong Kong Stock Exchange (HKEx)
 regulatory filings and ingests them into **any combination of PostgreSQL, MySQL/MariaDB,
 SQLite, MongoDB, Neo4j, ClickHouse, DuckDB, and SurrealDB** — with full-text extraction from
@@ -27,10 +31,17 @@ PDF/HTML/Excel documents, structured tables, coverage tracking, and optional gra
 It uses the undocumented HKEx JSON API directly, which is significantly faster and more
 reliable than browser-based scraping.
 
+```bash
+pip install "hkex-filing-scraper[all]"
+DATABASE_TARGET=sqlite SQLITE_PATH=hkex.db \
+  hkex-scraper --from-date 01/01/2024 --to-date 31/03/2024 --metadata-only
+```
+
 ## Contents
 
 - [Database support](#database-support)
 - [Why this project](#why-this-project)
+- [How this compares](#how-this-compares)
 - [How it works](#how-it-works)
 - [Features](#features)
 - [Installation](#installation)
@@ -69,6 +80,26 @@ first-class destination** — the order only decides which one serves reads. The
 Regulatory filings are the raw substrate for research, compliance, and LLM/RAG systems, but getting a complete, faithful, provenance-preserving copy is tedious: you have to reverse-engineer the HKEx API, handle a JSF session and pagination, parse Chinese/English bilingual PDFs, extract tables, and survive payload limits and database quirks. This tool does all of that and hands you a clean corpus.
 
 The **multi-sink** design means you don't have to adopt a new database to use it: keep whichever store your team already runs, mirror everything into a second one for SQL/BI/dbt tooling, stream documents into a document store, or load a columnar engine for analytics. Set one variable (`DATABASE_TARGET`) and the same run feeds one or several sinks.
+
+## How this compares
+
+Four ways to get HKEx filings, and what each one costs you.
+
+| | This project | HKEXnews web search | Browser automation you write | Licensed HKEx feed |
+| --- | --- | --- | --- | --- |
+| Bulk export | Yes | No — page-at-a-time | Yes | Yes |
+| History to April 1999 | Yes | Yes, manually | Depends on your code | Yes |
+| Full text of documents | Extracted from PDF/HTML/Excel | No — you open each file | You build the extractor | Varies by contract |
+| Structured tables | Extracted to Markdown | No | You build it | Varies |
+| Coverage verification | Per-chunk, auditable | Not applicable | You build it | Vendor SLA |
+| Lands in your engine | 8 engines, any combination | No | Whatever you wire up | Usually one format |
+| Speed | JSON API, no browser | Manual | Slower — renders pages | Fast |
+| Cost | Free, MIT | Free | Your time | Subscription |
+| Commercial redistribution | See [docs/legal.md](docs/legal.md) | Restricted | Restricted | Licensed |
+
+If you need licensed, redistributable, SLA-backed data, buy the feed. If you need a complete
+local corpus for research, compliance, or RAG, this replaces the pipeline you would otherwise
+write yourself.
 
 ## How it works
 
