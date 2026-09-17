@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-17
+
 ### Added
 
+- **PyPI release.** The package is now published to PyPI as `hkex-filing-scraper` (`pip install hkex-filing-scraper`), built, checksummed, and attested by a new `pypi.yml` workflow alongside the GitHub release.
 - **`--verify` cross-sink reconciliation.** Compares the configured sinks by filing-id set and
   `document_sha256` (not just counts), naming missing/extra ids and hash mismatches and exiting
   non-zero on any difference. `Sink.read_filing_digests()` is implemented for every adapter —
