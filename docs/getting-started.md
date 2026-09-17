@@ -25,17 +25,21 @@ differences.
 ## Install
 
 ```bash
-git clone https://github.com/simonplmak-cloud/hkex-filing-scraper.git
-cd hkex-filing-scraper
-pip install ".[all]"      # Excel extraction + dotenv + every database driver
+pip install hkex-filing-scraper              # core; SQLite works out of the box
+pip install "hkex-filing-scraper[all]"       # Excel extraction + dotenv + every database driver
 ```
 
-Minimal installs:
+Minimal and per-sink installs:
 
 ```bash
-pip install .              # metadata + HTML only; SQLite works out of the box
-pip install ".[postgres]"  # add one driver at a time
-pip install ".[duckdb]"    # or: mysql, mongodb, clickhouse, neo4j
+pip install "hkex-filing-scraper[postgres]"  # add one driver at a time
+pip install "hkex-filing-scraper[duckdb]"    # or: mysql, mongodb, clickhouse, neo4j
+```
+
+To run the latest unreleased code:
+
+```bash
+pip install "git+https://github.com/simonplmak-cloud/hkex-filing-scraper.git"
 ```
 
 > The `pdf` extra installs **AGPL-3.0** libraries (PyMuPDF, pymupdf4llm). It is **not** part

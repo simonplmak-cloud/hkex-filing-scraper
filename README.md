@@ -1,9 +1,10 @@
 # HKEx Filing Scraper
 
-![HKEx Filing Scraper — one scraper, many databases](docs/social_preview.png)
+![HKEx Filing Scraper — one scraper, many databases](https://raw.githubusercontent.com/simonplmak-cloud/hkex-filing-scraper/main/docs/social_preview.png)
 
 [![CI](https://github.com/simonplmak-cloud/hkex-filing-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/simonplmak-cloud/hkex-filing-scraper/actions/workflows/ci.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/simonplmak-cloud/hkex-filing-scraper?color=green)](https://github.com/simonplmak-cloud/hkex-filing-scraper/releases)
+[![PyPI](https://img.shields.io/pypi/v/hkex-filing-scraper?color=blue)](https://pypi.org/project/hkex-filing-scraper/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
@@ -119,22 +120,20 @@ More detail: [Architecture](docs/architecture.md) and [ADR 0002](docs/adr/0002-m
 
 ## Installation
 
-The package is distributed via GitHub (not PyPI):
+The package is published on PyPI:
 
 ```bash
-git clone https://github.com/simonplmak-cloud/hkex-filing-scraper.git
-cd hkex-filing-scraper
+pip install hkex-filing-scraper              # core; SQLite works out of the box
+pip install "hkex-filing-scraper[all]"       # Excel extraction + dotenv + every database driver
+pip install "hkex-filing-scraper[postgres]"  # add one sink driver at a time
+pip install "hkex-filing-scraper[mysql]"     # MySQL and MariaDB
+pip install "hkex-filing-scraper[duckdb]"    # or: mongodb, clickhouse, neo4j
+```
 
-# Excel extraction + dotenv + every database driver (permissive licenses only)
-pip install ".[all]"
+To run the latest unreleased code, install straight from GitHub:
 
-# Minimal (metadata + HTML only; SQLite works out of the box)
-pip install .
-
-# Add one sink driver at a time
-pip install ".[postgres]"
-pip install ".[mysql]"     # MySQL and MariaDB
-pip install ".[duckdb]"    # or: mongodb, clickhouse, neo4j
+```bash
+pip install "git+https://github.com/simonplmak-cloud/hkex-filing-scraper.git"
 ```
 
 Optional extras: `excel`, `postgres`, `mysql`, `duckdb`, `mongodb`, `clickhouse`, `neo4j`,
@@ -151,7 +150,7 @@ Releases carry signed build provenance and a CycloneDX SBOM — see
 
 ```bash
 # PDF text + table extraction. AGPL-3.0 — see the license note below.
-pip install ".[pdf]"
+pip install "hkex-filing-scraper[pdf]"
 ```
 
 > **License note.** The `pdf` extra installs **PyMuPDF** and **pymupdf4llm**, which are

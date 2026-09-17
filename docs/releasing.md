@@ -35,21 +35,31 @@ Change `v1.2.0` to the number you picked. That's it.
 
 1. Open the repository on GitHub.
 2. Click the **Actions** tab.
-3. Find the run named **Release**. A green tick ✅ means it worked.
+3. Find the run named **Release** (and **PyPI**, which publishes the same build to PyPI).
+   A green tick means it worked.
 
-When it is done, open the **Releases** page. Your new release has three files:
+When the **Release** run is done, open the **Releases** page. Your new release has three files:
 
 - `hkex_filing_scraper-<version>-py3-none-any.whl`
 - `hkex_filing_scraper-<version>.tar.gz`
 - `SHA256SUMS`
 
+When the **PyPI** run is done, the same wheel and sdist are live at
+<https://pypi.org/project/hkex-filing-scraper/>.
+
 ## Step 4 — Anyone can now install it
+
+```bash
+pip install hkex-filing-scraper
+```
+
+Or pin a specific release, or install straight from the Git tag:
 
 ```bash
 pip install "git+https://github.com/simonplmak-cloud/hkex-filing-scraper@v1.2.0"
 ```
 
-Or download the `.whl` file from the Releases page and install that.
+You can also download the `.whl` from the Releases page and install that.
 
 ## If something goes wrong
 
