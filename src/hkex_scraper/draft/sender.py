@@ -70,12 +70,12 @@ class EmailSender:
         self._sent: set[str] = set()
 
     def send(self, draft: OutreachDraft) -> bool:
+        if draft.send_key in self._sent:
+            return False  # idempotent no-op (already sent)
         if draft.status != "approved":
             raise NotApprovedError(f"draft {draft.id or draft.send_key[:8]} is not approved")
         if not draft.recipient_email or "@" not in draft.recipient_email:
             raise InvalidRecipientError("recipient email is empty or malformed")
-        if draft.send_key in self._sent:
-            return False  # idempotent no-op
         self._transport(draft)
         self._sent.add(draft.send_key)
         draft.status = "sent"
