@@ -16,10 +16,13 @@ authors = [
 keywords = [
     "hkex",
     "hong-kong",
+    "hong-kong-stock-exchange",
     "filings",
+    "regulatory-filings",
     "scraper",
     "financial-data",
     "data-pipeline",
+    "data-engineering",
     "etl",
     "multi-database",
     "postgresql",

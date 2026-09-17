@@ -76,6 +76,7 @@ SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
             ("adr/0001-versioning-and-release-automation.md", "ADR-0001-Versioning"),
             ("adr/0002-multi-sink-architecture.md", "ADR-0002-Multi-Sink"),
             ("adr/0003-sink-support-policy.md", "ADR-0003-Support-Policy"),
+            ("adr/0004-publish-to-pypi-trusted-publishing.md", "ADR-0004-Publish-To-PyPI"),
         ],
     ),
 ]

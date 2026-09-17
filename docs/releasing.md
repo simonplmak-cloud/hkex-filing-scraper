@@ -38,10 +38,11 @@ Change `v1.2.0` to the number you picked. That's it.
 3. Find the run named **Release** (and **PyPI**, which publishes the same build to PyPI).
    A green tick means it worked.
 
-When the **Release** run is done, open the **Releases** page. Your new release has three files:
+When the **Release** run is done, open the **Releases** page. Your new release has four files:
 
 - `hkex_filing_scraper-<version>-py3-none-any.whl`
 - `hkex_filing_scraper-<version>.tar.gz`
+- `hkex-filing-scraper-<version>.sbom.cdx.json`
 - `SHA256SUMS`
 
 When the **PyPI** run is done, the same wheel and sdist are live at
@@ -81,7 +82,7 @@ git tag -d v1.2.0
 > Releases page) to remove both.
 
 If the robot is badly broken and you need the files **right now**, there is a manual
-escape hatch: see [Release automation → Manual fallback](release-automation.md#manual-fallback).
+escape hatch: see [Release automation → Manual fallback](release-automation.md#8-manual-fallback).
 
 ## Verifying a release
 
