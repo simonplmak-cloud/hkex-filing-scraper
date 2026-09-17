@@ -45,7 +45,8 @@ When the **Release** run is done, open the **Releases** page. Your new release h
 - `SHA256SUMS`
 
 When the **PyPI** run is done, the same wheel and sdist are live at
-<https://pypi.org/project/hkex-filing-scraper/>.
+<https://pypi.org/project/hkex-filing-scraper/>. Publishing uses PyPI **Trusted
+Publishing** (OpenID Connect), so there is no long-lived upload token to store or rotate.
 
 ## Step 4 — Anyone can now install it
 
