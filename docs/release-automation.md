@@ -30,6 +30,7 @@ If you remember nothing else: *tag → robot → Release page.*
 | `src/hkex_scraper/__init__.py` | Exposes `__version__` (falls back to `0.0.0+unknown` for a bare source checkout). |
 | `.github/workflows/ci.yml` | Lint, format check, unit tests, PostgreSQL integration — runs on pushes/PRs. |
 | `.github/workflows/release.yml` | Builds and publishes release assets — runs on `v*` tags (and manually). |
+| `.github/workflows/pypi.yml` | Publishes the same build to PyPI via Trusted Publishing — runs on `v*` tags (and manually). |
 | `docs/releasing.md` | Step-by-step instructions for a maintainer. |
 
 ---
@@ -92,7 +93,8 @@ That is expected and fine — only tagged builds are released.
 ## 6. How to verify a release is correct
 
 1. Actions → **Release** run for the tag is green.
-2. Releases page shows three assets: `.whl`, `.tar.gz`, `SHA256SUMS`.
+2. Releases page shows four assets: `.whl`, `.tar.gz`, `SHA256SUMS`, and an SBOM
+   (`.sbom.cdx.json`).
 3. The wheel version equals the tag (the workflow already checks this).
 4. Spot-check a download:
 
@@ -176,7 +178,9 @@ unblock.
 
 ## 11. Known limitations
 
-- **Not on PyPI.** Distribution is GitHub-only (tags and release assets).
+- **Published to PyPI** as `hkex-filing-scraper`, via Trusted Publishing (OIDC) — no upload
+  token. GitHub Packages is **unavailable for Python** (GitHub dropped its PyPI registry), so
+  the package lives on PyPI plus GitHub Release assets, not on GitHub Packages.
 - **A tag push does not run `ci.yml`** (it triggers on `main`/PRs only). The release
   workflow trusts the tagged commit, so tag from `main` after CI is green.
 - Release **notes are generated** from commits/PRs; edit them on the Release page if you

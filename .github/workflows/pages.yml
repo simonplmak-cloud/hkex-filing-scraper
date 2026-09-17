@@ -7,6 +7,8 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - "README.md"
+      - "overrides/**"
+      - "scripts/build_llms.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -30,6 +32,8 @@ jobs:
         run: pip install "mkdocs-material>=9.5"
       - name: Build
         run: mkdocs build --strict
+      - name: Build llms-full.txt
+        run: python scripts/build_llms.py site/llms-full.txt
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site

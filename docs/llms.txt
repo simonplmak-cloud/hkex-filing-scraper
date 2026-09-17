@@ -1,0 +1,44 @@
+# HKEx Filing Scraper
+
+> Scrape and ingest HKEx (Hong Kong Stock Exchange) regulatory filings — 25+ years of
+> announcements and disclosures — into PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Neo4j,
+> ClickHouse, DuckDB, or SurrealDB, with full-text extraction from PDF/HTML/Excel, structured
+> tables, coverage tracking, and optional graph linking. This is the documentation site for
+> the `hkex-filing-scraper` Python package.
+
+## Getting started
+
+- [Home](https://simonplmak-cloud.github.io/hkex-filing-scraper/): what the project is and where to start.
+- [Getting started](https://simonplmak-cloud.github.io/hkex-filing-scraper/getting-started/): install, quick start, and first run.
+- [Configuration](https://simonplmak-cloud.github.io/hkex-filing-scraper/configuration/): every environment variable and the `DATABASE_TARGET` sink selector.
+- [CLI](https://simonplmak-cloud.github.io/hkex-filing-scraper/cli/): command-line reference and flags.
+
+## Database sinks
+
+- [Overview](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/): support matrix, capabilities, and popularity order.
+- [PostgreSQL](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/postgresql/), [MySQL / MariaDB](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/mysql/), [SQLite](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/sqlite/), [MongoDB](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/mongodb/), [Neo4j](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/neo4j/), [ClickHouse](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/clickhouse/), [DuckDB](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/duckdb/), [SurrealDB](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/surrealdb/): per-engine setup, upserts, and notes.
+
+## Architecture and operations
+
+- [Architecture](https://simonplmak-cloud.github.io/hkex-filing-scraper/architecture/): the two-phase pipeline and module map.
+- [Troubleshooting](https://simonplmak-cloud.github.io/hkex-filing-scraper/troubleshooting/): common failures and fixes.
+- [Testing](https://simonplmak-cloud.github.io/hkex-filing-scraper/testing/): how tests run and how to add them.
+
+## Project and governance
+
+- [Style guide](https://simonplmak-cloud.github.io/hkex-filing-scraper/STYLE/): docs style rules.
+- [De-risking register](https://simonplmak-cloud.github.io/hkex-filing-scraper/de-risking/): tracked risks and mitigations.
+- [Legal](https://simonplmak-cloud.github.io/hkex-filing-scraper/legal/): licensing and terms of use.
+- [Upgrading](https://simonplmak-cloud.github.io/hkex-filing-scraper/upgrading/): version-to-version migration notes.
+
+## Releasing
+
+- [How to release](https://simonplmak-cloud.github.io/hkex-filing-scraper/releasing/): the tag → CI → PyPI + GitHub Release flow.
+- [Release automation reference](https://simonplmak-cloud.github.io/hkex-filing-scraper/release-automation/): how and why the release pipeline works.
+
+## Decisions (ADRs)
+
+- [ADR 0001 — Versioning](https://simonplmak-cloud.github.io/hkex-filing-scraper/adr/0001-versioning-and-release-automation/): git-tag-as-version via hatch-vcs.
+- [ADR 0002 — Multi-sink](https://simonplmak-cloud.github.io/hkex-filing-scraper/adr/0002-multi-sink-architecture/): one scraper, many databases.
+- [ADR 0003 — Support policy](https://simonplmak-cloud.github.io/hkex-filing-scraper/adr/0003-sink-support-policy/): open source first.
+- [ADR 0004 — Publish to PyPI](https://simonplmak-cloud.github.io/hkex-filing-scraper/adr/0004-publish-to-pypi-trusted-publishing/): Trusted Publishing; GitHub Packages rejected.

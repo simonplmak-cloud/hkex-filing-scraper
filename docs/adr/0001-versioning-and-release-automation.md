@@ -1,6 +1,6 @@
 # ADR 0001 — Versioning and release automation
 
-- Status: Accepted
+- Status: Superseded by ADR 0004 (PyPI publishing)
 - Date: 2026-09-16
 - Deciders: maintainers
 
