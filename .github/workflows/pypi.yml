@@ -1,8 +1,9 @@
 name: PyPI
 
-# Publish the built distributions to PyPI. Runs alongside the GitHub Release workflow on a
-# tag push, and can be re-run by hand for a specific tag (for example, after the first-time
-# project creation on PyPI). It is a no-op until the PYPI_TOKEN secret exists.
+# Publish the built distributions to PyPI using Trusted Publishing (OpenID Connect):
+# the job authenticates to PyPI with a short-lived OIDC token, so no long-lived API token
+# exists anywhere. Runs alongside the GitHub Release workflow on a tag push, and can be
+# re-run by hand for a specific tag. `skip-existing` makes re-dispatch idempotent.
 
 on:
   push:
@@ -21,6 +22,9 @@ jobs:
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC identity for PyPI Trusted Publishing
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -39,21 +43,8 @@ jobs:
       - name: Validate the distribution metadata and README
         run: python -m twine check --strict dist/*
 
-      - name: Check for the PyPI token
-        id: token
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: |
-          if [ -z "${PYPI_TOKEN}" ]; then
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::PYPI_TOKEN is not set; skipping the upload. Create an API token at pypi.org (scoped to this project) and add it as the PYPI_TOKEN repository secret."
-          else
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publish to PyPI
-        if: steps.token.outputs.present == 'true'
+      - name: Publish to PyPI via Trusted Publishing
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
-          password: ${{ secrets.PYPI_TOKEN }}
+          skip-existing: true
           print-hash: true
