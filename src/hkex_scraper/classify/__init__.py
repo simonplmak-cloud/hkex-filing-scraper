@@ -1,11 +1,20 @@
-"""Valuation-trigger classification (A-003).
+"""Filing classification package (A-003/A-004/A-005).
 
-Deterministic-first classifier for the five valuation triggers with EN/ZH
-keyword sets, a confidence tier, and the triggering rule. A filing no rule can
-decide is handed to the (default no-model) fallback — never silently "not
-required".
+Deterministic-first, EN/ZH keyword classifiers for valuation, internal-control,
+and sustainability (ESG) triggers, feeding the opportunity pipeline.
 """
 
+from .esg_rules import ESGClassification, classify_scope_gap, classify_sustainability
+from .ic_rules import ICClassification, classify_internal_control
 from .valuation_rules import TRIGGERS, ValuationClassification, classify_valuation
 
-__all__ = ["TRIGGERS", "ValuationClassification", "classify_valuation"]
+__all__ = [
+    "ESGClassification",
+    "ICClassification",
+    "TRIGGERS",
+    "ValuationClassification",
+    "classify_internal_control",
+    "classify_scope_gap",
+    "classify_sustainability",
+    "classify_valuation",
+]
