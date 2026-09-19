@@ -85,6 +85,15 @@ POSTGRES_MIN_POOL: int = int(os.environ.get("POSTGRES_MIN_POOL", "1"))
 POSTGRES_MAX_POOL: int = int(
     os.environ.get("POSTGRES_MAX_POOL", os.environ.get("MAX_DOWNLOAD_WORKERS", "15"))
 )
+# Create the optional pg_trgm GIN indexes that accelerate substring search on title
+# and document_text. Best effort: a DB user without privileges logs a warning and the
+# scan-based search still works. Set POSTGRES_FTS_INDEX=0 to skip index creation.
+POSTGRES_FTS_INDEX: bool = os.environ.get("POSTGRES_FTS_INDEX", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
 
 
 def postgres_conninfo() -> str:

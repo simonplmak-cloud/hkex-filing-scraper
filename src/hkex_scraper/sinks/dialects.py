@@ -11,7 +11,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, List, Sequence, Tuple
+from typing import Any, Dict, List, Sequence, Tuple
+
+from .base import AGGREGATE_GROUPS, SEARCH_COLUMNS, FilingQuery
 
 # Canonical column order (mirrors db_postgres).
 FILING_COLUMNS: Tuple[str, ...] = (
@@ -54,6 +56,30 @@ COVERAGE_COLUMNS: Tuple[str, ...] = (
     "timestamp",
 )
 COVERAGE_KEY: Tuple[str, ...] = ("chunk_from", "chunk_to", "run_id")
+
+# Read columns that may arrive as JSON *text* (SQLite/DuckDB/MySQL) or as a native
+# list/dict (PostgreSQL). Normalised by :func:`decode_row` for read consumers.
+JSON_READ_FIELDS: Tuple[str, ...] = ("referenced_tickers", "document_tables")
+
+
+def decode_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a copy of *row* with JSON-text columns parsed into real values.
+
+    Native list/dict values (PostgreSQL ``jsonb``) are left untouched; empty strings
+    become ``None`` so a consumer sees "absent" rather than a bogus empty value.
+    """
+    decoded = dict(row)
+    for name in JSON_READ_FIELDS:
+        value = decoded.get(name)
+        if isinstance(value, (str, bytes)) and value:
+            try:
+                decoded[name] = json.loads(value)
+            except (ValueError, TypeError):
+                pass  # leave the raw text rather than fail the read
+        elif value == "":
+            decoded[name] = None
+    return decoded
+
 
 EDGE_TABLES = {"has_filing": "has_filing", "references_filing": "references_filing"}
 EDGE_COLUMNS = {
@@ -287,18 +313,30 @@ class Dialect:
             f"WHERE {self.q('company_ticker')} IS NOT NULL"
         )
 
-    def fetch_titles_sql(self, with_tickers: bool, n: int = 1) -> str:
+    def fetch_titles_sql(self, with_tickers: bool, n: int = 1, with_query: bool = False) -> str:
         cols = (
             f"{self.q('filing_id')}, {self.q('title')}, "
             f"{self.q('stock_code')}, {self.q('company_ticker')}"
         )
+        clauses = []
         if with_tickers:
-            where = f"{self.q('company_ticker')} IN {self.in_clause(n)}"
-        else:
-            where = f"{self.q('title')} IS NOT NULL"
+            clauses.append(f"{self.q('company_ticker')} IN {self.in_clause(n)}")
+        clauses.append(f"{self.q('title')} IS NOT NULL")
+        if with_query:
+            # Dialect-agnostic case-insensitive substring match.
+            clauses.append(f"LOWER({self.q('title')}) LIKE LOWER({self.ph})")
+        where = " AND ".join(clauses)
         return (
             f"SELECT {cols} FROM {self.q('exchange_filing')} WHERE {where} "
             f"ORDER BY {self.q('filing_id')} ASC LIMIT {self.ph} OFFSET {self.ph}"
+        )
+
+    def fetch_filing_detail_sql(self) -> str:
+        """One filing's metadata plus its extracted document columns."""
+        cols = self.columns((*FILING_COLUMNS, *DOCUMENT_COLUMNS))
+        return (
+            f"SELECT {cols} FROM {self.q('exchange_filing')} "
+            f"WHERE {self.q('filing_id')} = {self.ph} LIMIT 1"
         )
 
     def fetch_coverage_sql(self) -> str:
@@ -306,6 +344,136 @@ class Dialect:
             f"SELECT {self.columns(COVERAGE_COLUMNS)} FROM {self.q('scrape_coverage')} "
             f"ORDER BY {self.q('chunk_from')} DESC"
         )
+
+    # -- composable search -------------------------------------------------
+    def cast_text(self, expr: str) -> str:
+        """Cast *expr* to text for a portable ``LIKE`` on a JSON/array column."""
+        return f"CAST({expr} AS TEXT)"
+
+    def date_only(self, expr: str) -> str:
+        """Reduce a date/datetime column to a calendar date for inclusive range filters."""
+        return f"CAST({expr} AS DATE)"
+
+    def snippet_sql(self) -> str:
+        """A ~320-char window around the first match of this dialect's text placeholder."""
+        col = self.q("document_text")
+        return f"substr({col}, GREATEST(1, STRPOS(LOWER({col}), LOWER({self.ph})) - 80), 320)"
+
+    def _search_clauses(self, query: FilingQuery) -> Tuple[List[str], List[Any]]:
+        clauses: List[str] = []
+        params: List[Any] = []
+        placeholders = lambda n: ", ".join([self.ph] * n)  # noqa: E731
+        if query.tickers:
+            clauses.append(f"{self.q('company_ticker')} IN ({placeholders(len(query.tickers))})")
+            params.extend(query.tickers)
+        if query.stock_codes:
+            clauses.append(f"{self.q('stock_code')} IN ({placeholders(len(query.stock_codes))})")
+            params.extend(query.stock_codes)
+        if query.title_query:
+            clauses.append(f"LOWER({self.q('title')}) LIKE LOWER({self.ph})")
+            params.append(f"%{query.title_query}%")
+        if query.text_query:
+            clauses.append(f"LOWER({self.q('document_text')}) LIKE LOWER({self.ph})")
+            params.append(f"%{query.text_query}%")
+        if query.filing_types:
+            clauses.append(f"{self.q('filing_type')} IN ({placeholders(len(query.filing_types))})")
+            params.extend(query.filing_types)
+        if query.filing_categories:
+            clauses.append(
+                f"{self.q('filing_category')} IN ({placeholders(len(query.filing_categories))})"
+            )
+            params.extend(query.filing_categories)
+        if query.document_status:
+            real = [s for s in query.document_status if s and s != "unprocessed"]
+            parts: List[str] = []
+            if real:
+                parts.append(f"{self.q('document_status')} IN ({placeholders(len(real))})")
+                params.extend(real)
+            if any(s == "unprocessed" for s in query.document_status):
+                parts.append(f"{self.q('document_status')} IS NULL")
+            if parts:
+                clauses.append("(" + " OR ".join(parts) + ")")
+        if query.exchange:
+            clauses.append(f"{self.q('exchange')} = {self.ph}")
+            params.append(query.exchange)
+        if query.source:
+            clauses.append(f"{self.q('source')} = {self.ph}")
+            params.append(query.source)
+        if query.document_type:
+            clauses.append(f"{self.q('document_type')} = {self.ph}")
+            params.append(query.document_type)
+        if query.referenced_ticker:
+            ref = self.cast_text(self.q("referenced_tickers"))
+            clauses.append(f"LOWER({ref}) LIKE LOWER({self.ph})")
+            params.append(f"%{query.referenced_ticker}%")
+        if query.date_from:
+            clauses.append(f"{self.date_only(self.q('filing_date'))} >= {self.ph}")
+            params.append(query.date_from)
+        if query.date_to:
+            clauses.append(f"{self.date_only(self.q('filing_date'))} <= {self.ph}")
+            params.append(query.date_to)
+        return clauses, params
+
+    def _search_where(self, query: FilingQuery) -> Tuple[str, List[Any]]:
+        clauses, params = self._search_clauses(query)
+        return (" AND ".join(clauses) if clauses else "1 = 1"), params
+
+    def _search_order(self, order_by: str) -> str:
+        date = self.q("filing_date")
+        fid = self.q("filing_id")
+        if order_by == "filing_date_asc":
+            return f"({date} IS NULL) ASC, {date} ASC, {fid} ASC"
+        if order_by == "title_asc":
+            return f"{self.q('title')} ASC, {fid} ASC"
+        if order_by == "filing_id_asc":
+            return f"{fid} ASC"
+        return f"({date} IS NULL) ASC, {date} DESC, {fid} ASC"
+
+    def search_filings_sql(self, query: FilingQuery, limit: int, offset: int) -> Tuple[str, list]:
+        cols = self.columns(SEARCH_COLUMNS)
+        where, params = self._search_where(query)
+        order = self._search_order(query.order_by)
+        sql = (
+            f"SELECT {cols} FROM {self.q('exchange_filing')} WHERE {where} "
+            f"ORDER BY {order} LIMIT {self.ph} OFFSET {self.ph}"
+        )
+        return sql, [*params, limit, offset]
+
+    def search_documents_sql(self, query: FilingQuery, limit: int, offset: int) -> Tuple[str, list]:
+        cols = self.columns(SEARCH_COLUMNS)
+        where, params = self._search_where(query)
+        order = self._search_order(query.order_by)
+        snippet = self.snippet_sql()
+        sql = (
+            f"SELECT {cols}, {snippet} AS {self.q('snippet')} "
+            f"FROM {self.q('exchange_filing')} WHERE {where} "
+            f"ORDER BY {order} LIMIT {self.ph} OFFSET {self.ph}"
+        )
+        # The snippet placeholder comes first in the SELECT list.
+        return sql, [f"%{query.text_query}%", *params, limit, offset]
+
+    def aggregate_filings_sql(self, group_by: str, query: FilingQuery) -> Tuple[str, list]:
+        if group_by not in AGGREGATE_GROUPS:
+            raise ValueError(f"unsupported group_by '{group_by}'")
+        col = self.q(group_by)
+        where, params = self._search_where(query)
+        key, count = self.q("key"), self.q("count")
+        sql = (
+            f"SELECT {col} AS {key}, count(*) AS {count} FROM {self.q('exchange_filing')} "
+            f"WHERE {where} GROUP BY {col} ORDER BY {count} DESC, {key} ASC LIMIT 200"
+        )
+        return sql, params
+
+    def list_companies_sql(self, limit: int, offset: int) -> Tuple[str, list]:
+        ticker = self.q("company_ticker")
+        sql = (
+            f"SELECT {ticker} AS {self.q('company_ticker')}, "
+            f"MAX({self.q('stock_name')}) AS {self.q('stock_name')}, "
+            f"count(*) AS {self.q('filing_count')} FROM {self.q('exchange_filing')} "
+            f"WHERE {ticker} IS NOT NULL AND {ticker} <> '' GROUP BY {ticker} "
+            f"ORDER BY {self.q('filing_count')} DESC, {ticker} ASC LIMIT {self.ph} OFFSET {self.ph}"
+        )
+        return sql, [limit, offset]
 
 
 class PostgresDialect(Dialect):
@@ -430,6 +598,16 @@ class MySQLDialect(Dialect):
     def _upsert_suffix(self, key: Sequence[str], cols: Sequence[str]) -> str:
         return self._duplicate_key_suffix(key, cols)
 
+    def cast_text(self, expr: str) -> str:
+        return f"CAST({expr} AS CHAR)"
+
+    def date_only(self, expr: str) -> str:
+        return f"DATE({expr})"
+
+    def snippet_sql(self) -> str:
+        col = self.q("document_text")
+        return f"SUBSTRING({col}, GREATEST(1, LOCATE(LOWER({self.ph}), LOWER({col})) - 80), 320)"
+
 
 class SQLiteDialect(Dialect):
     """SQLite dialect. Datetimes and JSON are stored as ISO-8601 / JSON text."""
@@ -486,6 +664,13 @@ class SQLiteDialect(Dialect):
                 f"({self.columns(cols)})"
             )
         return statements
+
+    def snippet_sql(self) -> str:
+        col = self.q("document_text")
+        return f"substr({col}, max(1, instr(lower({col}), lower({self.ph})) - 80), 320)"
+
+    def date_only(self, expr: str) -> str:
+        return f"substr({expr}, 1, 10)"
 
 
 class DuckDBDialect(Dialect):

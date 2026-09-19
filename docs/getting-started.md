@@ -26,7 +26,7 @@ differences.
 
 ```bash
 pip install hkex-filing-scraper              # core; SQLite works out of the box
-pip install "hkex-filing-scraper[all]"       # Excel extraction + dotenv + every database driver
+pip install "hkex-filing-scraper[all]"       # Excel + dotenv + every database driver + the MCP server
 ```
 
 Minimal and per-sink installs:

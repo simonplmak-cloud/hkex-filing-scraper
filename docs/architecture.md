@@ -117,4 +117,5 @@ flowchart TD
 | `sinks/{mongodb,clickhouse,neo4j}.py` | Document, columnar, and graph adapters |
 | `sinks/surrealdb.py` | SurrealQL, `RELATE`, RPC→`/sql` fallback, company-id resolution |
 | `graph.py` | Edge dispatch to every edge-capable sink |
+| `mcp_server.py` | Optional read-only MCP server (stdio) exposing a fixed catalog of read tools |
 | `utils.py` | Logging, classification, ticker extraction, company-key helpers |

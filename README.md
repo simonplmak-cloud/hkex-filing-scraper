@@ -117,6 +117,7 @@ More detail: [Architecture](docs/architecture.md) and [ADR 0002](docs/adr/0002-m
 - **Parallel and resumable** — batching, parallel downloads, stalled-job detection, and per-chunk coverage tracking.
 - **Failure isolation** — a failure on one sink never blocks or rolls back another; per-sink counters are reported every run, and the run exits non-zero if any configured sink failed.
 - **Optional dependencies** — core is `requests` + `beautifulsoup4`; document extraction and every database driver (`psycopg`, `PyMySQL`, `duckdb`, `pymongo`, `clickhouse-connect`, `neo4j`) are extras with graceful fallback. SQLite needs no extra.
+- **MCP server** — an optional read-only Model Context Protocol server (`hkex-scraper-mcp`) exposes the corpus to LLM clients over stdio. See [docs/mcp.md](docs/mcp.md).
 
 ## Installation
 
@@ -124,10 +125,11 @@ The package is published on PyPI:
 
 ```bash
 pip install hkex-filing-scraper              # core; SQLite works out of the box
-pip install "hkex-filing-scraper[all]"       # Excel extraction + dotenv + every database driver
+pip install "hkex-filing-scraper[all]"       # Excel + dotenv + every database driver + the MCP server
 pip install "hkex-filing-scraper[postgres]"  # add one sink driver at a time
 pip install "hkex-filing-scraper[mysql]"     # MySQL and MariaDB
 pip install "hkex-filing-scraper[duckdb]"    # or: mongodb, clickhouse, neo4j
+pip install "hkex-filing-scraper[mcp]"       # read-only MCP server for LLM clients
 ```
 
 To run the latest unreleased code, install straight from GitHub:
@@ -137,7 +139,7 @@ pip install "git+https://github.com/simonplmak-cloud/hkex-filing-scraper.git"
 ```
 
 Optional extras: `excel`, `postgres`, `mysql`, `duckdb`, `mongodb`, `clickhouse`, `neo4j`,
-`all`, `dev`. SQLite and SurrealDB need no extra.
+`mcp`, `all`, `dev`. SQLite and SurrealDB need no extra.
 
 For a fully locked development environment, `uv.lock` pins every dependency including extras:
 
@@ -353,6 +355,7 @@ WHERE filing_type = 'Annual Report';
 - [Try it locally (`examples/`)](examples/README.md)
 - [Configuration reference](docs/configuration.md)
 - [CLI reference](docs/cli.md)
+- [MCP server](docs/mcp.md)
 - [Architecture](docs/architecture.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Testing](docs/testing.md)

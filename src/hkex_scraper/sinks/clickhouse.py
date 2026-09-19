@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .. import config
 from ..utils import ticker_to_record_id
 from .base import (
+    AGGREGATE_GROUPS,
     EDGE_KINDS,
     ERR_NONE,
     SUFFIX_DRIVER_MISSING,
@@ -25,11 +26,13 @@ from .base import (
     SUFFIX_PAYLOAD_ERROR,
     SUFFIX_SCHEMA_ERROR,
     SUFFIX_WRITE_ERROR,
+    FilingQuery,
     Sink,
     SinkCapabilities,
     code,
     redact,
 )
+from .dialects import decode_row
 
 try:  # pragma: no cover - exercised via monkeypatching in tests
     import clickhouse_connect  # type: ignore
@@ -42,6 +45,88 @@ except Exception:  # pragma: no cover - depends on environment
 FILING_TABLE = "exchange_filing"
 COVERAGE_TABLE = "scrape_coverage"
 EDGE_TABLES = {"has_filing": "has_filing", "references_filing": "references_filing"}
+
+# Columns returned by the composable search surface (never document_text).
+SEARCH_COLUMNS = (
+    "filing_id",
+    "company_ticker",
+    "stock_code",
+    "stock_name",
+    "exchange",
+    "filing_type",
+    "filing_subtype",
+    "filing_category",
+    "title",
+    "filing_date",
+    "document_url",
+    "referenced_tickers",
+    "source",
+    "updated_at",
+    "document_status",
+    "document_type",
+    "document_text_len",
+    "document_table_cnt",
+)
+
+_ORDER_BY = {
+    "filing_date_desc": "filing_date DESC, filing_id ASC",
+    "filing_date_asc": "filing_date ASC, filing_id ASC",
+    "title_asc": "title ASC, filing_id ASC",
+    "filing_id_asc": "filing_id ASC",
+}
+
+
+def _search_where(query: FilingQuery) -> Tuple[str, Dict[str, Any]]:
+    clauses: List[str] = []
+    params: Dict[str, Any] = {}
+    if query.tickers:
+        clauses.append("company_ticker IN {tickers:Array(String)}")
+        params["tickers"] = list(query.tickers)
+    if query.stock_codes:
+        clauses.append("stock_code IN {stock_codes:Array(String)}")
+        params["stock_codes"] = list(query.stock_codes)
+    if query.title_query:
+        clauses.append("title ILIKE {title:String}")
+        params["title"] = f"%{query.title_query}%"
+    if query.text_query:
+        clauses.append("document_text ILIKE {text:String}")
+        params["text"] = f"%{query.text_query}%"
+    if query.filing_types:
+        clauses.append("filing_type IN {ftypes:Array(String)}")
+        params["ftypes"] = list(query.filing_types)
+    if query.filing_categories:
+        clauses.append("filing_category IN {fcats:Array(String)}")
+        params["fcats"] = list(query.filing_categories)
+    if query.document_status:
+        real = [s for s in query.document_status if s and s != "unprocessed"]
+        parts: List[str] = []
+        if real:
+            parts.append("document_status IN {statuses:Array(String)}")
+            params["statuses"] = real
+        if any(s == "unprocessed" for s in query.document_status):
+            parts.append("document_status IS NULL")
+        if parts:
+            clauses.append("(" + " OR ".join(parts) + ")")
+    if query.exchange:
+        clauses.append("exchange = {exchange:String}")
+        params["exchange"] = query.exchange
+    if query.source:
+        clauses.append("source = {source:String}")
+        params["source"] = query.source
+    if query.document_type:
+        clauses.append("document_type = {dtype:String}")
+        params["dtype"] = query.document_type
+    if query.referenced_ticker:
+        clauses.append("arrayStringConcat(referenced_tickers, ',') ILIKE {ref:String}")
+        params["ref"] = f"%{query.referenced_ticker}%"
+    if query.date_from:
+        clauses.append("filing_date >= {date_from:Date}")
+        params["date_from"] = query.date_from
+    if query.date_to:
+        clauses.append("filing_date <= {date_to:Date}")
+        params["date_to"] = query.date_to
+    return (" AND ".join(clauses) if clauses else "1 = 1"), params
+
 
 DT = "DateTime64(3, 'UTC')"
 
@@ -147,6 +232,7 @@ class ClickHouseSink(Sink):
         arrays=True,
         transactions=False,
         bulk=True,
+        snippets=True,
     )
 
     def __init__(self) -> None:
@@ -442,27 +528,105 @@ class ClickHouseSink(Sink):
         )
 
     def fetch_titles(
-        self, ticker_set: Optional[List[str]], offset: int, page_size: int
+        self,
+        ticker_set: Optional[List[str]],
+        offset: int,
+        page_size: int,
+        title_query: str = "",
     ) -> Tuple[List[Dict[str, Any]], str]:
+        clauses = ["title IS NOT NULL"]
+        params: Dict[str, Any] = {"limit": page_size, "offset": offset}
         if ticker_set is not None:
-            sql = (
-                f"SELECT filing_id, title, stock_code, company_ticker FROM {FILING_TABLE} FINAL "
-                "WHERE company_ticker IN {tickers:Array(String)} AND title IS NOT NULL "
-                "ORDER BY filing_id ASC LIMIT {limit:Int32} OFFSET {offset:Int32}"
-            )
-            params: Dict[str, Any] = {
-                "tickers": list(ticker_set),
-                "limit": page_size,
-                "offset": offset,
-            }
-        else:
-            sql = (
-                f"SELECT filing_id, title, stock_code, company_ticker FROM {FILING_TABLE} FINAL "
-                "WHERE title IS NOT NULL "
-                "ORDER BY filing_id ASC LIMIT {limit:Int32} OFFSET {offset:Int32}"
-            )
-            params = {"limit": page_size, "offset": offset}
+            clauses.append("company_ticker IN {tickers:Array(String)}")
+            params["tickers"] = list(ticker_set)
+        if title_query:
+            clauses.append("title ILIKE {query:String}")
+            params["query"] = f"%{title_query}%"
+        where = " AND ".join(clauses)
+        sql = (
+            f"SELECT filing_id, title, stock_code, company_ticker FROM {FILING_TABLE} FINAL "
+            f"WHERE {where} "
+            "ORDER BY filing_id ASC LIMIT {limit:Int32} OFFSET {offset:Int32}"
+        )
         return self._query(sql, params)
+
+    def fetch_filing_detail(self, filing_id: str) -> Tuple[Optional[Dict[str, Any]], str]:
+        if not filing_id:
+            return None, ERR_NONE
+        rows, err = self._query(
+            f"SELECT {', '.join(_FILING_COLUMNS)} FROM {FILING_TABLE} FINAL "
+            "WHERE filing_id = {filing_id:String} LIMIT 1",
+            {"filing_id": filing_id},
+        )
+        if err:
+            return None, err
+        if not rows:
+            return None, ERR_NONE
+        return decode_row(rows[0]), ERR_NONE
+
+    def search_filings(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        where, params = _search_where(query)
+        order = _ORDER_BY.get(query.order_by, _ORDER_BY["filing_date_desc"])
+        sql = (
+            f"SELECT {', '.join(SEARCH_COLUMNS)} FROM {FILING_TABLE} FINAL WHERE {where} "
+            "ORDER BY " + order + " LIMIT {limit:Int32} OFFSET {offset:Int32}"
+        )
+        rows, err = self._query(sql, {**params, "limit": limit, "offset": offset})
+        if err:
+            return [], err
+        return [decode_row(row) for row in rows], ERR_NONE
+
+    def search_documents(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        where, params = _search_where(query)
+        order = _ORDER_BY.get(query.order_by, _ORDER_BY["filing_date_desc"])
+        snippet = (
+            "substring(document_text, greatest(1, "
+            "positionCaseInsensitive(document_text, {snippet:String}) - 80), 320) AS snippet"
+        )
+        sql = (
+            f"SELECT {', '.join(SEARCH_COLUMNS)}, {snippet} FROM {FILING_TABLE} FINAL "
+            "WHERE " + where + " ORDER BY " + order + " LIMIT {limit:Int32} OFFSET {offset:Int32}"
+        )
+        rows, err = self._query(
+            sql,
+            {**params, "snippet": query.text_query, "limit": limit, "offset": offset},
+        )
+        if err:
+            return [], err
+        results = []
+        for row in rows:
+            decoded = decode_row(row)
+            decoded["snippet"] = decoded.get("snippet") or ""
+            results.append(decoded)
+        return results, ERR_NONE
+
+    def aggregate_filings(
+        self, group_by: str, query: FilingQuery
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        if group_by not in AGGREGATE_GROUPS:
+            return [], code(self.id, SUFFIX_PAYLOAD_ERROR)
+        where, params = _search_where(query)
+        sql = (
+            f"SELECT {group_by} AS key, count() AS count FROM {FILING_TABLE} FINAL "
+            f"WHERE {where} GROUP BY {group_by} ORDER BY count DESC, key ASC LIMIT 200"
+        )
+        rows, err = self._query(sql, params)
+        if err:
+            return [], err
+        return [{"key": r.get("key"), "count": int(r.get("count") or 0)} for r in rows], ERR_NONE
+
+    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+        sql = (
+            "SELECT company_ticker, max(stock_name) AS stock_name, count() AS filing_count "
+            f"FROM {FILING_TABLE} FINAL WHERE company_ticker != '' GROUP BY company_ticker "
+            "ORDER BY filing_count DESC, company_ticker ASC "
+            "LIMIT {limit:Int32} OFFSET {offset:Int32}"
+        )
+        return self._query(sql, {"limit": limit, "offset": offset})
 
     def fetch_coverage(self) -> Tuple[List[Dict[str, Any]], str]:
         return self._query(

@@ -19,11 +19,13 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from .config import (
+    POSTGRES_FTS_INDEX,
     POSTGRES_MAX_POOL,
     POSTGRES_MIN_POOL,
     POSTGRES_SCHEMA,
     postgres_conninfo,
 )
+from .sinks.base import AGGREGATE_GROUPS, SEARCH_COLUMNS, FilingQuery
 from .utils import log
 
 # ---------------------------------------------------------------------------
@@ -310,6 +312,62 @@ def initialize_postgres_schema() -> Tuple[bool, str]:
         if not ok:
             return False, code or ERR_SCHEMA_ERROR
     return True, ERR_NONE
+
+
+_SEARCH_EXTENSION_SQL = "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+
+
+def _build_search_index_sql(schema: str = "public") -> List[str]:
+    """Optional ``pg_trgm`` GIN indexes that accelerate substring search.
+
+    ``gin_trgm_ops`` supports ``LIKE``/``ILIKE`` with a ``%substring%`` pattern, which is
+    exactly the shape of ``search_filings``/``search_documents`` predicates. The operator
+    class is schema-qualified because the connection's ``search_path`` is the sink schema,
+    not the schema the extension was installed into.
+    """
+    opclass = f"{schema}.gin_trgm_ops"
+    return [
+        "CREATE INDEX IF NOT EXISTS idx_pg_ef_title_trgm ON exchange_filing "
+        f"USING gin (lower(title) {opclass})",
+        "CREATE INDEX IF NOT EXISTS idx_pg_ef_doctext_trgm ON exchange_filing "
+        f"USING gin (lower(document_text) {opclass})",
+    ]
+
+
+def _trgm_schema() -> str:
+    """Return the schema the ``pg_trgm`` extension lives in (default ``public``)."""
+    value, code = _fetch_scalar(
+        "SELECT n.nspname FROM pg_extension e "
+        "JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'pg_trgm'"
+    )
+    name = str(value) if not code and value else "public"
+    return name if _SCHEMA_RE.match(name) else "public"
+
+
+def ensure_search_indexes() -> Tuple[bool, str]:
+    """Create the optional search indexes. Best effort: never fails schema init.
+
+    A database user without ``CREATE EXTENSION``/``CREATE INDEX`` privilege logs a warning
+    and search falls back to a sequential scan. Returns ``(ok, first_error_code)``.
+    """
+    if not POSTGRES_FTS_INDEX:
+        return True, ERR_NONE
+    if not _PSYCOPG_AVAILABLE:
+        return False, ERR_DRIVER_MISSING
+    if not postgres_conninfo():
+        return False, ERR_DSN_MISSING
+    ok, code, _ = _run(_SEARCH_EXTENSION_SQL)
+    if not ok:
+        log(f"  PostgreSQL search index warning: {_redact(code)[:200]}")
+        return False, code
+    schema = _trgm_schema()
+    first_error = ""
+    for statement in _build_search_index_sql(schema):
+        ok, code, _ = _run(statement)
+        if not ok:
+            first_error = first_error or code
+            log(f"  PostgreSQL search index warning: {_redact(code)[:200]}")
+    return (not first_error), first_error
 
 
 # ---------------------------------------------------------------------------
@@ -686,22 +744,163 @@ def distinct_company_tickers() -> Tuple[List[str], str]:
 
 
 def fetch_titles(
-    ticker_set: Optional[List[str]], offset: int, page_size: int
+    ticker_set: Optional[List[str]], offset: int, page_size: int, title_query: str = ""
 ) -> Tuple[List[Dict[str, Any]], str]:
-    """Page through filings for cross-reference title scanning."""
+    """Page through filings for cross-reference scanning or title search."""
+    clauses: List[str] = []
+    params: List[Any] = []
     if ticker_set:
-        sql = (
-            "SELECT filing_id, title, stock_code, company_ticker FROM exchange_filing "
-            "WHERE company_ticker = ANY(%s) ORDER BY filing_id ASC LIMIT %s OFFSET %s"
-        )
-        params: List[Any] = [list(ticker_set), page_size, offset]
-    else:
-        sql = (
-            "SELECT filing_id, title, stock_code, company_ticker FROM exchange_filing "
-            "WHERE title IS NOT NULL ORDER BY filing_id ASC LIMIT %s OFFSET %s"
-        )
-        params = [page_size, offset]
+        clauses.append("company_ticker = ANY(%s)")
+        params.append(list(ticker_set))
+    clauses.append("title IS NOT NULL")
+    if title_query:
+        clauses.append("LOWER(title) LIKE LOWER(%s)")
+        params.append(f"%{title_query}%")
+    sql = (
+        "SELECT filing_id, title, stock_code, company_ticker FROM exchange_filing "
+        f"WHERE {' AND '.join(clauses)} ORDER BY filing_id ASC LIMIT %s OFFSET %s"
+    )
+    params.extend([page_size, offset])
     return _fetch_all(sql, params)
+
+
+def fetch_filing_detail(filing_id: str) -> Tuple[Optional[Dict[str, Any]], str]:
+    """Return one filing's metadata plus its extracted document columns."""
+    if not filing_id:
+        return None, ERR_NONE
+    columns = ", ".join((*_FILING_COLUMNS, *_DOCUMENT_COLUMNS))
+    rows, code = _fetch_all(
+        f"SELECT {columns} FROM exchange_filing WHERE filing_id = %s LIMIT 1", [filing_id]
+    )
+    if code:
+        return None, code
+    if not rows:
+        return None, ERR_NONE
+    return rows[0], ERR_NONE
+
+
+# ---------------------------------------------------------------------------
+# Composable search (bound parameters only)
+# ---------------------------------------------------------------------------
+def _search_where(query: FilingQuery) -> Tuple[List[str], List[Any]]:
+    clauses: List[str] = []
+    params: List[Any] = []
+    if query.tickers:
+        clauses.append("company_ticker = ANY(%s)")
+        params.append(list(query.tickers))
+    if query.stock_codes:
+        clauses.append("stock_code = ANY(%s)")
+        params.append(list(query.stock_codes))
+    if query.title_query:
+        clauses.append("LOWER(title) LIKE LOWER(%s)")
+        params.append(f"%{query.title_query}%")
+    if query.text_query:
+        clauses.append("LOWER(document_text) LIKE LOWER(%s)")
+        params.append(f"%{query.text_query}%")
+    if query.filing_types:
+        clauses.append("filing_type = ANY(%s)")
+        params.append(list(query.filing_types))
+    if query.filing_categories:
+        clauses.append("filing_category = ANY(%s)")
+        params.append(list(query.filing_categories))
+    if query.document_status:
+        real = [s for s in query.document_status if s and s != "unprocessed"]
+        parts: List[str] = []
+        if real:
+            parts.append("document_status = ANY(%s)")
+            params.append(real)
+        if any(s == "unprocessed" for s in query.document_status):
+            parts.append("document_status IS NULL")
+        if parts:
+            clauses.append("(" + " OR ".join(parts) + ")")
+    if query.exchange:
+        clauses.append("exchange = %s")
+        params.append(query.exchange)
+    if query.source:
+        clauses.append("source = %s")
+        params.append(query.source)
+    if query.document_type:
+        clauses.append("document_type = %s")
+        params.append(query.document_type)
+    if query.referenced_ticker:
+        clauses.append("EXISTS (SELECT 1 FROM unnest(referenced_tickers) AS t WHERE t ILIKE %s)")
+        params.append(f"%{query.referenced_ticker}%")
+    if query.date_from:
+        clauses.append("filing_date::date >= %s")
+        params.append(query.date_from)
+    if query.date_to:
+        clauses.append("filing_date::date <= %s")
+        params.append(query.date_to)
+    return clauses, params
+
+
+def _search_order(order_by: str) -> str:
+    if order_by == "filing_date_asc":
+        return "filing_date ASC NULLS LAST, filing_id ASC"
+    if order_by == "title_asc":
+        return "title ASC, filing_id ASC"
+    if order_by == "filing_id_asc":
+        return "filing_id ASC"
+    return "filing_date DESC NULLS LAST, filing_id ASC"
+
+
+def search_filings(query: FilingQuery, offset: int, limit: int) -> Tuple[List[Dict[str, Any]], str]:
+    """Rich filing summaries matching *query*."""
+    clauses, params = _search_where(query)
+    where = " AND ".join(clauses) if clauses else "TRUE"
+    columns = ", ".join(SEARCH_COLUMNS)
+    sql = (
+        f"SELECT {columns} FROM exchange_filing WHERE {where} "
+        f"ORDER BY {_search_order(query.order_by)} LIMIT %s OFFSET %s"
+    )
+    return _fetch_all(sql, [*params, limit, offset])
+
+
+def search_documents(
+    query: FilingQuery, offset: int, limit: int
+) -> Tuple[List[Dict[str, Any]], str]:
+    """Full-text search over ``document_text`` with a snippet."""
+    clauses, params = _search_where(query)
+    where = " AND ".join(clauses) if clauses else "TRUE"
+    columns = ", ".join(SEARCH_COLUMNS)
+    snippet = (
+        "substr(document_text, GREATEST(1, STRPOS(LOWER(document_text), LOWER(%s)) - 80), 320)"
+    )
+    sql = (
+        f"SELECT {columns}, {snippet} AS snippet FROM exchange_filing WHERE {where} "
+        f"ORDER BY {_search_order(query.order_by)} LIMIT %s OFFSET %s"
+    )
+    rows, code = _fetch_all(sql, [f"%{query.text_query}%", *params, limit, offset])
+    if code:
+        return [], code
+    return rows, ERR_NONE
+
+
+def aggregate_filings(group_by: str, query: FilingQuery) -> Tuple[List[Dict[str, Any]], str]:
+    """Group matching filings by *group_by*; ``[{key, count}]`` by count desc."""
+    if group_by not in AGGREGATE_GROUPS:
+        return [], ERR_PAYLOAD_ERROR
+    clauses, params = _search_where(query)
+    where = " AND ".join(clauses) if clauses else "TRUE"
+    sql = (
+        f"SELECT {group_by} AS key, count(*) AS count FROM exchange_filing WHERE {where} "
+        f"GROUP BY {group_by} ORDER BY count DESC, key ASC LIMIT 200"
+    )
+    rows, code = _fetch_all(sql, params)
+    if code:
+        return [], code
+    return [{"key": r.get("key"), "count": int(r.get("count") or 0)} for r in rows], ERR_NONE
+
+
+def list_companies(limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+    """Distinct companies with a display name and filing count."""
+    sql = (
+        "SELECT company_ticker, MAX(stock_name) AS stock_name, count(*) AS filing_count "
+        "FROM exchange_filing WHERE company_ticker IS NOT NULL AND company_ticker <> '' "
+        "GROUP BY company_ticker ORDER BY filing_count DESC, company_ticker ASC "
+        "LIMIT %s OFFSET %s"
+    )
+    return _fetch_all(sql, [limit, offset])
 
 
 def fetch_coverage() -> Tuple[List[Dict[str, Any]], str]:

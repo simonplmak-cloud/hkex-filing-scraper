@@ -45,6 +45,44 @@ class TestSchemaDdl:
         )
 
 
+class TestSearchIndexes:
+    def test_index_sql_is_idempotent_and_trigram(self):
+        statements = db_postgres._build_search_index_sql("public")
+        joined = "\n".join(statements)
+        assert "public.gin_trgm_ops" in joined
+        assert "lower(document_text)" in joined
+        assert "lower(title)" in joined
+        for statement in statements:
+            assert "IF NOT EXISTS" in statement
+        assert db_postgres._SEARCH_EXTENSION_SQL == "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+
+    def test_index_sql_qualifies_a_custom_extension_schema(self):
+        statements = db_postgres._build_search_index_sql("hkex")
+        assert all("hkex.gin_trgm_ops" in statement for statement in statements)
+
+    def test_ensure_search_indexes_can_be_disabled(self, monkeypatch):
+        monkeypatch.setattr(db_postgres, "POSTGRES_FTS_INDEX", False)
+        assert db_postgres.ensure_search_indexes() == (True, "")
+
+    def test_ensure_search_indexes_degrades_gracefully(self, monkeypatch):
+        monkeypatch.setattr(db_postgres, "POSTGRES_FTS_INDEX", True)
+        monkeypatch.setattr(db_postgres, "_PSYCOPG_AVAILABLE", True)
+        monkeypatch.setattr(db_postgres, "postgres_conninfo", lambda: "postgresql://x")
+        monkeypatch.setattr(
+            db_postgres, "_run", lambda *a, **k: (False, "insufficient_privilege", 0)
+        )
+        ok, code = db_postgres.ensure_search_indexes()
+        assert ok is False
+        assert "insufficient_privilege" in code
+
+    def test_schema_init_is_unaffected_by_index_failure(self, monkeypatch):
+        from hkex_scraper.sinks.postgres import PostgresSink
+
+        monkeypatch.setattr(db_postgres, "initialize_postgres_schema", lambda: (True, ""))
+        monkeypatch.setattr(db_postgres, "ensure_search_indexes", lambda: (False, "PERM"))
+        assert PostgresSink().ensure_schema() == (True, "")
+
+
 # ---------------------------------------------------------------------------
 # Filing metadata upsert
 # ---------------------------------------------------------------------------

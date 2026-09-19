@@ -10,6 +10,7 @@ ClickHouse, DuckDB, or SurrealDB.
 - [Database sinks (support matrix)](sinks/README.md)
 - [Configuration reference](configuration.md)
 - [CLI reference](cli.md)
+- [MCP server](mcp.md)
 - [Try it locally (`examples/`)](https://github.com/simonplmak-cloud/hkex-filing-scraper/tree/main/examples)
 
 ## Per-sink guides

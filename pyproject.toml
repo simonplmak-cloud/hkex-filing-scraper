@@ -65,6 +65,7 @@ duckdb = ["duckdb>=1.0"]
 mongodb = ["pymongo>=4.6"]
 clickhouse = ["clickhouse-connect>=0.7"]
 neo4j = ["neo4j>=5.20"]
+mcp = ["mcp>=1.30,<2"]
 all = [
     "openpyxl>=3.1",
     "python-dotenv>=1.0",
@@ -74,6 +75,7 @@ all = [
     "pymongo>=4.6",
     "clickhouse-connect>=0.7",
     "neo4j>=5.20",
+    "mcp>=1.30,<2",
 ]
 dev = [
     "hypothesis>=6.100",
@@ -86,6 +88,7 @@ dev = [
 
 [project.scripts]
 hkex-scraper = "hkex_scraper.main:main"
+hkex-scraper-mcp = "hkex_scraper.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/simonplmak-cloud/hkex-filing-scraper"
@@ -119,7 +122,7 @@ source = ["src/hkex_scraper"]
 # make a build pass. It is measured over the unit suite, which cannot execute the live-only
 # modules (sink drivers, extractor, SurrealDB/PostgreSQL/Neo4j/MongoDB/ClickHouse adapters) —
 # those are exercised by the integration CI jobs instead. See CONTRIBUTING.md.
-fail_under = 45  # measured 45.9%; raise, never lower
+fail_under = 46  # measured 47.3%; raise, never lower
 show_missing = true
 skip_covered = true
 precision = 1
