@@ -69,6 +69,69 @@ class SinkCapabilities:
     transactions: bool = False
     bulk: bool = True
     text_limit: Optional[int] = None
+    text_search: bool = True
+    snippets: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Query surface
+# ---------------------------------------------------------------------------
+# Accepted ``FilingQuery.order_by`` values and ``aggregate_filings`` group-bys.
+SEARCH_ORDER_BY = ("filing_date_desc", "filing_date_asc", "title_asc", "filing_id_asc")
+AGGREGATE_GROUPS = (
+    "company_ticker",
+    "filing_type",
+    "filing_category",
+    "document_status",
+    "exchange",
+)
+
+# Read columns returned by ``search_filings`` / ``search_documents`` (never document_text).
+SEARCH_COLUMNS = (
+    "filing_id",
+    "company_ticker",
+    "stock_code",
+    "stock_name",
+    "exchange",
+    "filing_type",
+    "filing_subtype",
+    "filing_category",
+    "title",
+    "filing_date",
+    "document_url",
+    "referenced_tickers",
+    "source",
+    "updated_at",
+    "document_status",
+    "document_type",
+    "document_text_len",
+    "document_table_cnt",
+)
+
+
+@dataclass(frozen=True)
+class FilingQuery:
+    """A composable, sink-agnostic filing filter.
+
+    Every field is optional; an empty value is ignored. ``document_status`` accepts the
+    synthetic value ``"unprocessed"`` (meaning ``document_status IS NULL``) alongside the
+    real statuses. ``date_from``/``date_to`` are ISO ``YYYY-MM-DD`` strings (inclusive).
+    """
+
+    tickers: Tuple[str, ...] = ()
+    stock_codes: Tuple[str, ...] = ()
+    title_query: str = ""
+    text_query: str = ""
+    filing_types: Tuple[str, ...] = ()
+    filing_categories: Tuple[str, ...] = ()
+    document_status: Tuple[str, ...] = ()
+    exchange: str = ""
+    referenced_ticker: str = ""
+    source: str = ""
+    document_type: str = ""
+    date_from: str = ""
+    date_to: str = ""
+    order_by: str = "filing_date_desc"
 
 
 # ---------------------------------------------------------------------------
@@ -146,8 +209,52 @@ class Sink:
         return [], code(self.id, SUFFIX_UNSUPPORTED)
 
     def fetch_titles(
-        self, ticker_set: Optional[List[str]], offset: int, page_size: int
+        self,
+        ticker_set: Optional[List[str]],
+        offset: int,
+        page_size: int,
+        title_query: str = "",
     ) -> Tuple[List[Dict[str, Any]], str]:
+        """Page through filings for cross-reference scanning or title search.
+
+        ``title_query`` is an optional case-insensitive substring filter on the title.
+        It is additive: existing callers pass only the first three arguments.
+        """
+        return [], code(self.id, SUFFIX_UNSUPPORTED)
+
+    def fetch_filing_detail(self, filing_id: str) -> Tuple[Optional[Dict[str, Any]], str]:
+        """Return one filing's metadata plus extracted document fields.
+
+        Returns ``(None, "")`` when the id is not found and ``(None, code)`` on a
+        driver/connection error, so a caller can tell "no such filing" from "cannot read".
+        Optional capability: a sink that cannot serve it returns ``UNSUPPORTED``.
+        """
+        return None, code(self.id, SUFFIX_UNSUPPORTED)
+
+    def search_filings(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        """Return rich filing summaries matching *query*, newest-first by default.
+
+        Rows carry every filing field plus document status/size summary columns, and never
+        ``document_text``. Optional capability: returns ``UNSUPPORTED`` when absent.
+        """
+        return [], code(self.id, SUFFIX_UNSUPPORTED)
+
+    def search_documents(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        """Full-text search over ``document_text``; adds a ``snippet`` when supported."""
+        return [], code(self.id, SUFFIX_UNSUPPORTED)
+
+    def aggregate_filings(
+        self, group_by: str, query: FilingQuery
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        """Group matching filings by ``group_by``; returns ``[{key, count}]`` by count desc."""
+        return [], code(self.id, SUFFIX_UNSUPPORTED)
+
+    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+        """Return distinct companies with a display name and filing count."""
         return [], code(self.id, SUFFIX_UNSUPPORTED)
 
     def fetch_coverage(self) -> Tuple[List[Dict[str, Any]], str]:

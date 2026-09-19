@@ -19,6 +19,7 @@ from .base import (
     SUFFIX_PAYLOAD_ERROR,
     SUFFIX_SCHEMA_ERROR,
     SUFFIX_WRITE_ERROR,
+    FilingQuery,
     Sink,
     SinkCapabilities,
     code,
@@ -30,6 +31,7 @@ from .dialects import (
     EDGE_KEYS,
     FILING_COLUMNS,
     Dialect,
+    decode_row,
 )
 
 from ..utils import ticker_to_record_id
@@ -61,7 +63,13 @@ class RelationalSink(Sink):
     """A sink backed by a SQL dialect and a driver adapter."""
 
     capabilities = SinkCapabilities(
-        model="relational", native_upsert=True, reads=True, edges=True, json=True, arrays=False
+        model="relational",
+        native_upsert=True,
+        reads=True,
+        edges=True,
+        json=True,
+        arrays=False,
+        snippets=True,
     )
 
     def __init__(self, sink_id: str, dialect: Dialect, driver: RelationalDriver) -> None:
@@ -303,14 +311,73 @@ class RelationalSink(Sink):
         return self._read(sql, list(tickers))
 
     def fetch_titles(
-        self, ticker_set: Optional[List[str]], offset: int, page_size: int
+        self,
+        ticker_set: Optional[List[str]],
+        offset: int,
+        page_size: int,
+        title_query: str = "",
     ) -> Tuple[List[Dict[str, Any]], str]:
+        with_query = bool(title_query)
         if ticker_set:
-            sql = self.dialect.fetch_titles_sql(True, len(ticker_set))
-            params: List[Any] = [*ticker_set, page_size, offset]
+            sql = self.dialect.fetch_titles_sql(True, len(ticker_set), with_query=with_query)
+            params: List[Any] = [*ticker_set]
         else:
-            sql = self.dialect.fetch_titles_sql(False)
-            params = [page_size, offset]
+            sql = self.dialect.fetch_titles_sql(False, with_query=with_query)
+            params = []
+        if with_query:
+            params.append(f"%{title_query}%")
+        params.extend([page_size, offset])
+        return self._read(sql, params)
+
+    def fetch_filing_detail(self, filing_id: str) -> Tuple[Optional[Dict[str, Any]], str]:
+        if not filing_id:
+            return None, ERR_NONE
+        rows, err = self._read(self.dialect.fetch_filing_detail_sql(), [filing_id])
+        if err:
+            return None, err
+        if not rows:
+            return None, ERR_NONE
+        return decode_row(rows[0]), ERR_NONE
+
+    def search_filings(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        sql, params = self.dialect.search_filings_sql(query, limit, offset)
+        rows, err = self._read(sql, params)
+        if err:
+            return [], err
+        return [decode_row(row) for row in rows], ERR_NONE
+
+    def search_documents(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        sql, params = self.dialect.search_documents_sql(query, limit, offset)
+        rows, err = self._read(sql, params)
+        if err:
+            return [], err
+        results = []
+        for row in rows:
+            decoded = decode_row(row)
+            decoded["snippet"] = decoded.get("snippet") or ""
+            results.append(decoded)
+        return results, ERR_NONE
+
+    def aggregate_filings(
+        self, group_by: str, query: FilingQuery
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        try:
+            sql, params = self.dialect.aggregate_filings_sql(group_by, query)
+        except ValueError:
+            return [], code(self.id, SUFFIX_PAYLOAD_ERROR)
+        rows, err = self._read(sql, params)
+        if err:
+            return [], err
+        return [
+            {"key": row.get("key"), "count": int(row.get("count") or 0)} for row in rows
+        ], ERR_NONE
+
+    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+        sql, params = self.dialect.list_companies_sql(limit, offset)
         return self._read(sql, params)
 
     def read_filing_digests(self) -> Tuple[List[Dict[str, Any]], str]:

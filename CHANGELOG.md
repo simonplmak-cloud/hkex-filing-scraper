@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Optional read-only MCP server.** `pip install "hkex-filing-scraper[mcp]"` provides
+  `hkex-scraper-mcp`, a [Model Context Protocol](https://modelcontextprotocol.io) server over
+  stdio that exposes a fixed catalog of read-only tools (`search_filings`, `get_filing`,
+  `list_tickers`, `count_filings`, `get_coverage`, `get_parity`, `verify_sinks`, and more) so
+  LLM clients can read a scraped corpus. It never writes, never scrapes, never runs DDL, and
+  imports the `mcp` SDK lazily behind the extra. See [docs/mcp.md](docs/mcp.md).
+- **`Sink.fetch_filing_detail()`** — a single-filing read returning metadata plus extracted
+  document text and tables, implemented across every adapter (relational dialects, PostgreSQL,
+  MongoDB, ClickHouse, Neo4j, SurrealDB). `Sink.fetch_titles()` gained an optional
+  case-insensitive `title_query` filter.
+- **Composable filing search across every sink.** A typed `FilingQuery` and four new read
+  methods (`search_filings`, `search_documents`, `aggregate_filings`, `list_companies`) are
+  implemented for all nine sinks. The MCP server gains `search_filings` filters (ticker, stock
+  code, title, type, category, status, exchange, referenced ticker, inclusive date range,
+  ordering), `search_documents` full-text search with snippets, `get_statistics` counts by
+  ticker/type/status, `list_companies`, a generalised `list_pending_filings`, `get_filings`
+  batch reads, `get_coverage` totals, and three MCP resources. Search results now carry the
+  full filing metadata plus a document summary instead of four columns. No schema changes.
+- **Optional PostgreSQL search indexes.** `POSTGRES_FTS_INDEX` (default on) creates
+  `pg_trgm` GIN indexes over `lower(title)` and `lower(document_text)` so substring search
+  can use an index bitmap scan. Best effort: a user without privilege logs a warning and
+  search falls back to a scan, and schema init is never blocked.
+
 ## [2.1.0] - 2026-09-17
 
 ### Added

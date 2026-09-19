@@ -12,6 +12,7 @@
 - [Getting started](https://simonplmak-cloud.github.io/hkex-filing-scraper/getting-started/): install, quick start, and first run.
 - [Configuration](https://simonplmak-cloud.github.io/hkex-filing-scraper/configuration/): every environment variable and the `DATABASE_TARGET` sink selector.
 - [CLI](https://simonplmak-cloud.github.io/hkex-filing-scraper/cli/): command-line reference and flags.
+- [MCP server](https://simonplmak-cloud.github.io/hkex-filing-scraper/mcp/): a read-only Model Context Protocol server over stdio for LLM clients.
 
 ## Database sinks
 

@@ -27,6 +27,7 @@ Required when `DATABASE_TARGET` includes `postgres`.
 | `POSTGRES_SCHEMA` | `public` | Schema for the mirrored tables. |
 | `POSTGRES_MIN_POOL` | `1` | Minimum pool connections. |
 | `POSTGRES_MAX_POOL` | `15` | Maximum pool connections. |
+| `POSTGRES_FTS_INDEX` | `1` | Create the optional `pg_trgm` GIN indexes that accelerate substring search on `title` and `document_text`. Best effort — a user without privilege logs a warning and search falls back to a scan. Set to `0` to skip index creation. |
 
 ## MySQL / MariaDB
 
@@ -113,6 +114,13 @@ Required when `DATABASE_TARGET` includes `surrealdb`.
 | -------- | ------- | ----------- |
 | `COMPANY_TABLE` | — | Company table name. When empty, graph linking is disabled. |
 | `COMPANY_ID_PATTERN` | `{code}_{exchange}` | Pattern that converts a ticker (`0451.HK`) into a company key (`451_HK`). |
+
+## MCP server
+
+The optional [MCP server](mcp.md) introduces no new environment variables: it reuses the
+same `DATABASE_TARGET` and sink connection settings and reads them from `Path.cwd()/.env`.
+Because the database adapters do not enforce read-only access, point the MCP server at a
+database user that only has `SELECT` (or a read replica). See [MCP server](mcp.md#safety).
 
 ## Performance
 

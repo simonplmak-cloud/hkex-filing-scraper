@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .. import config
 from ..utils import ticker_to_record_id
 from .base import (
+    AGGREGATE_GROUPS,
     EDGE_KINDS,
     ERR_NONE,
     SUFFIX_DRIVER_MISSING,
@@ -22,6 +23,7 @@ from .base import (
     SUFFIX_PAYLOAD_ERROR,
     SUFFIX_SCHEMA_ERROR,
     SUFFIX_WRITE_ERROR,
+    FilingQuery,
     Sink,
     SinkCapabilities,
     code,
@@ -372,29 +374,194 @@ class Neo4jSink(Sink):
         return records, ERR_NONE
 
     def fetch_titles(
-        self, ticker_set: Optional[List[str]], offset: int, page_size: int
+        self,
+        ticker_set: Optional[List[str]],
+        offset: int,
+        page_size: int,
+        title_query: str = "",
     ) -> Tuple[List[Dict[str, Any]], str]:
+        clauses = ["f.title IS NOT NULL"]
+        params: Dict[str, Any] = {"offset": offset, "limit": page_size}
         if ticker_set is not None:
-            query = (
-                "MATCH (f:Filing) WHERE f.companyTicker IN $tickers AND f.title IS NOT NULL "
-                "RETURN f.filingId AS filing_id, f.title AS title, "
-                "       f.stockCode AS stock_code, f.companyTicker AS company_ticker "
-                "ORDER BY f.filingId SKIP $offset LIMIT $limit"
-            )
-            params: Dict[str, Any] = {
-                "tickers": list(ticker_set),
-                "offset": offset,
-                "limit": page_size,
-            }
-        else:
-            query = (
-                "MATCH (f:Filing) WHERE f.title IS NOT NULL "
-                "RETURN f.filingId AS filing_id, f.title AS title, "
-                "       f.stockCode AS stock_code, f.companyTicker AS company_ticker "
-                "ORDER BY f.filingId SKIP $offset LIMIT $limit"
-            )
-            params = {"offset": offset, "limit": page_size}
+            clauses.append("f.companyTicker IN $tickers")
+            params["tickers"] = list(ticker_set)
+        if title_query:
+            clauses.append("toLower(f.title) CONTAINS toLower($query)")
+            params["query"] = title_query
+        where = " AND ".join(clauses)
+        query = (
+            f"MATCH (f:Filing) WHERE {where} "
+            "RETURN f.filingId AS filing_id, f.title AS title, "
+            "       f.stockCode AS stock_code, f.companyTicker AS company_ticker "
+            "ORDER BY f.filingId SKIP $offset LIMIT $limit"
+        )
         records, _summary, err = self._run(query, params)
+        if err:
+            return [], err
+        return records, ERR_NONE
+
+    def fetch_filing_detail(self, filing_id: str) -> Tuple[Optional[Dict[str, Any]], str]:
+        if not filing_id:
+            return None, ERR_NONE
+        query = (
+            "MATCH (f:Filing {filingId: $id}) "
+            "RETURN f.filingId AS filing_id, f.companyTicker AS company_ticker, "
+            "       f.stockCode AS stock_code, f.stockName AS stock_name, "
+            "       f.exchange AS exchange, f.filingType AS filing_type, "
+            "       f.filingSubtype AS filing_subtype, f.filingCategory AS filing_category, "
+            "       f.title AS title, f.filingDate AS filing_date, "
+            "       f.documentUrl AS document_url, f.referencedTickers AS referenced_tickers, "
+            "       f.source AS source, f.updatedAt AS updated_at, "
+            "       f.documentSize AS document_size, f.documentType AS document_type, "
+            "       f.documentHash AS document_hash, f.documentSha256 AS document_sha256, "
+            "       f.documentText AS document_text, f.documentTextLen AS document_text_len, "
+            "       f.documentTables AS document_tables, "
+            "       f.documentTableCnt AS document_table_cnt, "
+            "       f.documentStatus AS document_status, "
+            "       f.documentStatusReason AS document_status_reason"
+        )
+        records, _summary, err = self._run(query, {"id": filing_id})
+        if err:
+            return None, err
+        if not records:
+            return None, ERR_NONE
+        row = dict(records[0])
+        tables = row.get("document_tables")
+        if isinstance(tables, str) and tables:
+            try:
+                row["document_tables"] = json.loads(tables)
+            except (ValueError, TypeError):
+                pass
+        return row, ERR_NONE
+
+    @staticmethod
+    def _search_where(query: FilingQuery) -> Tuple[List[str], Dict[str, Any]]:
+        clauses: List[str] = []
+        params: Dict[str, Any] = {}
+        if query.tickers:
+            clauses.append("f.companyTicker IN $tickers")
+            params["tickers"] = list(query.tickers)
+        if query.stock_codes:
+            clauses.append("f.stockCode IN $stock_codes")
+            params["stock_codes"] = list(query.stock_codes)
+        if query.title_query:
+            clauses.append("toLower(f.title) CONTAINS toLower($title)")
+            params["title"] = query.title_query
+        if query.text_query:
+            clauses.append("toLower(f.documentText) CONTAINS toLower($text)")
+            params["text"] = query.text_query
+        if query.filing_types:
+            clauses.append("f.filingType IN $ftypes")
+            params["ftypes"] = list(query.filing_types)
+        if query.filing_categories:
+            clauses.append("f.filingCategory IN $fcats")
+            params["fcats"] = list(query.filing_categories)
+        if query.document_status:
+            real = [s for s in query.document_status if s and s != "unprocessed"]
+            parts: List[str] = []
+            if real:
+                parts.append("f.documentStatus IN $statuses")
+                params["statuses"] = real
+            if any(s == "unprocessed" for s in query.document_status):
+                parts.append("f.documentStatus IS NULL")
+            if parts:
+                clauses.append("(" + " OR ".join(parts) + ")")
+        if query.exchange:
+            clauses.append("f.exchange = $exchange")
+            params["exchange"] = query.exchange
+        if query.source:
+            clauses.append("f.source = $source")
+            params["source"] = query.source
+        if query.document_type:
+            clauses.append("f.documentType = $dtype")
+            params["dtype"] = query.document_type
+        if query.referenced_ticker:
+            clauses.append("ANY(t IN f.referencedTickers WHERE toLower(t) = toLower($refticker))")
+            params["refticker"] = query.referenced_ticker
+        if query.date_from:
+            clauses.append("f.filingDate >= datetime($date_from)")
+            params["date_from"] = query.date_from
+        if query.date_to:
+            clauses.append("f.filingDate < datetime($date_to) + duration({days: 1})")
+            params["date_to"] = query.date_to
+        return clauses, params
+
+    _SEARCH_RETURN = (
+        "f.filingId AS filing_id, f.companyTicker AS company_ticker, "
+        "f.stockCode AS stock_code, f.stockName AS stock_name, f.exchange AS exchange, "
+        "f.filingType AS filing_type, f.filingSubtype AS filing_subtype, "
+        "f.filingCategory AS filing_category, f.title AS title, "
+        "toString(f.filingDate) AS filing_date, f.documentUrl AS document_url, "
+        "f.referencedTickers AS referenced_tickers, f.source AS source, "
+        "toString(f.updatedAt) AS updated_at, f.documentStatus AS document_status, "
+        "f.documentType AS document_type, f.documentTextLen AS document_text_len, "
+        "f.documentTableCnt AS document_table_cnt"
+    )
+
+    _ORDER = {
+        "filing_date_desc": "f.filingDate DESC, f.filingId ASC",
+        "filing_date_asc": "f.filingDate ASC, f.filingId ASC",
+        "title_asc": "f.title ASC, f.filingId ASC",
+        "filing_id_asc": "f.filingId ASC",
+    }
+
+    def search_filings(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        clauses, params = self._search_where(query)
+        where = " AND ".join(clauses) if clauses else "true"
+        params.update({"offset": offset, "limit": limit})
+        order = self._ORDER.get(query.order_by, self._ORDER["filing_date_desc"])
+        query_text = (
+            f"MATCH (f:Filing) WHERE {where} RETURN {self._SEARCH_RETURN} "
+            f"ORDER BY {order} SKIP $offset LIMIT $limit"
+        )
+        records, _summary, err = self._run(query_text, params)
+        if err:
+            return [], err
+        return records, ERR_NONE
+
+    def search_documents(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        rows, err = self.search_filings(query, offset, limit)
+        if err:
+            return [], err
+        for row in rows:
+            row["snippet"] = None
+        return rows, ERR_NONE
+
+    def aggregate_filings(
+        self, group_by: str, query: FilingQuery
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        if group_by not in AGGREGATE_GROUPS:
+            return [], code(self.id, SUFFIX_PAYLOAD_ERROR)
+        prop = {
+            "company_ticker": "companyTicker",
+            "filing_type": "filingType",
+            "filing_category": "filingCategory",
+            "document_status": "documentStatus",
+            "exchange": "exchange",
+        }[group_by]
+        clauses, params = self._search_where(query)
+        where = " AND ".join(clauses) if clauses else "true"
+        query_text = (
+            f"MATCH (f:Filing) WHERE {where} RETURN f.{prop} AS key, count(*) AS count "
+            "ORDER BY count DESC, key ASC LIMIT 200"
+        )
+        records, _summary, err = self._run(query_text, params)
+        if err:
+            return [], err
+        return [{"key": r.get("key"), "count": int(r.get("count") or 0)} for r in records], ERR_NONE
+
+    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+        query_text = (
+            "MATCH (f:Filing) WHERE f.companyTicker IS NOT NULL AND f.companyTicker <> '' "
+            "RETURN f.companyTicker AS company_ticker, head(collect(f.stockName)) AS stock_name, "
+            "count(*) AS filing_count ORDER BY filing_count DESC, company_ticker ASC "
+            "SKIP $offset LIMIT $limit"
+        )
+        records, _summary, err = self._run(query_text, {"offset": offset, "limit": limit})
         if err:
             return [], err
         return records, ERR_NONE

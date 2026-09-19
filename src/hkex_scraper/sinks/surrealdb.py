@@ -22,11 +22,13 @@ from ..config import (
 )
 from ..utils import escape_sql, log, normalize_company_id, squash_ws, ticker_to_record_id
 from .base import (
+    AGGREGATE_GROUPS,
     EDGE_KINDS,
     ERR_NONE,
     SUFFIX_DISABLED,
     SUFFIX_PAYLOAD_ERROR,
     SUFFIX_WRITE_ERROR,
+    FilingQuery,
     Sink,
     SinkCapabilities,
     code,
@@ -43,6 +45,128 @@ def _first_result_rows(result: Any) -> list:
             if isinstance(rows, list):
                 return rows
     return []
+
+
+# SurrealDB stores documents with camelCase keys; the read contract is snake_case.
+_DETAIL_FIELD_MAP = {
+    "filingId": "filing_id",
+    "companyTicker": "company_ticker",
+    "stockCode": "stock_code",
+    "stockName": "stock_name",
+    "exchange": "exchange",
+    "filingType": "filing_type",
+    "filingSubtype": "filing_subtype",
+    "filingCategory": "filing_category",
+    "title": "title",
+    "filingDate": "filing_date",
+    "documentUrl": "document_url",
+    "referencedTickers": "referenced_tickers",
+    "source": "source",
+    "updatedAt": "updated_at",
+    "documentSize": "document_size",
+    "documentType": "document_type",
+    "documentHash": "document_hash",
+    "documentSha256": "document_sha256",
+    "documentText": "document_text",
+    "documentTextLen": "document_text_len",
+    "documentTables": "document_tables",
+    "documentTableCnt": "document_table_cnt",
+    "documentStatus": "document_status",
+    "documentStatusReason": "document_status_reason",
+}
+
+
+def _detail_from_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Map a SurrealDB filing record onto the canonical snake_case detail shape."""
+    return {target: row[source] for source, target in _DETAIL_FIELD_MAP.items() if source in row}
+
+
+# The subset of fields returned by the composable search surface.
+_SEARCH_FIELD_MAP = {
+    key: value
+    for key, value in _DETAIL_FIELD_MAP.items()
+    if value
+    in {
+        "filing_id",
+        "company_ticker",
+        "stock_code",
+        "stock_name",
+        "exchange",
+        "filing_type",
+        "filing_subtype",
+        "filing_category",
+        "title",
+        "filing_date",
+        "document_url",
+        "referenced_tickers",
+        "source",
+        "updated_at",
+        "document_status",
+        "document_type",
+        "document_text_len",
+        "document_table_cnt",
+    }
+}
+_SEARCH_SELECT = ", ".join(_SEARCH_FIELD_MAP)
+_GROUP_PROP = {
+    "company_ticker": "companyTicker",
+    "filing_type": "filingType",
+    "filing_category": "filingCategory",
+    "document_status": "documentStatus",
+    "exchange": "exchange",
+}
+_ORDER = {
+    "filing_date_desc": "filingDate DESC, filingId ASC",
+    "filing_date_asc": "filingDate ASC, filingId ASC",
+    "title_asc": "title ASC, filingId ASC",
+    "filing_id_asc": "filingId ASC",
+}
+
+
+def _search_where(query: FilingQuery) -> str:
+    clauses: List[str] = []
+    if query.tickers:
+        items = ", ".join(f"'{escape_sql(t)}'" for t in query.tickers)
+        clauses.append(f"companyTicker IN [{items}]")
+    if query.stock_codes:
+        items = ", ".join(f"'{escape_sql(c)}'" for c in query.stock_codes)
+        clauses.append(f"stockCode IN [{items}]")
+    if query.title_query:
+        clauses.append(
+            f"string::lowercase(title) CONTAINS '{escape_sql(query.title_query.lower())}'"
+        )
+    if query.text_query:
+        needle = escape_sql(query.text_query.lower())
+        clauses.append(f"string::lowercase(documentText) CONTAINS '{needle}'")
+    if query.filing_types:
+        items = ", ".join(f"'{escape_sql(t)}'" for t in query.filing_types)
+        clauses.append(f"filingType IN [{items}]")
+    if query.filing_categories:
+        items = ", ".join(f"'{escape_sql(c)}'" for c in query.filing_categories)
+        clauses.append(f"filingCategory IN [{items}]")
+    if query.document_status:
+        real = [s for s in query.document_status if s and s != "unprocessed"]
+        parts: List[str] = []
+        if real:
+            items = ", ".join(f"'{escape_sql(s)}'" for s in real)
+            parts.append(f"documentStatus IN [{items}]")
+        if any(s == "unprocessed" for s in query.document_status):
+            parts.append("documentStatus IS NONE")
+        if parts:
+            clauses.append("(" + " OR ".join(parts) + ")")
+    if query.exchange:
+        clauses.append(f"exchange = '{escape_sql(query.exchange)}'")
+    if query.source:
+        clauses.append(f"source = '{escape_sql(query.source)}'")
+    if query.document_type:
+        clauses.append(f"documentType = '{escape_sql(query.document_type)}'")
+    if query.referenced_ticker:
+        clauses.append(f"referencedTickers CONTAINS '{escape_sql(query.referenced_ticker)}'")
+    if query.date_from:
+        clauses.append(f"filingDate >= d'{escape_sql(query.date_from)}'")
+    if query.date_to:
+        clauses.append(f"filingDate <= d'{escape_sql(query.date_to)}'")
+    return " AND ".join(clauses) if clauses else "true"
 
 
 class SurrealDBSink(Sink):
@@ -521,13 +645,19 @@ class SurrealDBSink(Sink):
         ], ERR_NONE
 
     def fetch_titles(
-        self, ticker_set: Optional[List[str]], offset: int, page_size: int
+        self,
+        ticker_set: Optional[List[str]],
+        offset: int,
+        page_size: int,
+        title_query: str = "",
     ) -> Tuple[List[Dict[str, Any]], str]:
+        clauses = ["title IS NOT NONE"]
         if ticker_set is not None:
             ticker_list = ", ".join(f"'{escape_sql(t)}'" for t in ticker_set)
-            where = f"companyTicker IN [{ticker_list}]"
-        else:
-            where = "title IS NOT NONE"
+            clauses.append(f"companyTicker IN [{ticker_list}]")
+        if title_query:
+            clauses.append(f"string::lowercase(title) CONTAINS {escape_sql(title_query.lower())}")
+        where = " AND ".join(clauses)
         sql = (
             f"SELECT filingId, title, stockCode, companyTicker FROM exchange_filing "
             f"WHERE {where} ORDER BY filingId ASC START {offset} LIMIT {page_size};"
@@ -541,6 +671,88 @@ class SurrealDBSink(Sink):
                 "title": row.get("title", ""),
                 "stock_code": row.get("stockCode", ""),
                 "company_ticker": row.get("companyTicker", ""),
+            }
+            for row in _first_result_rows(result)
+            if isinstance(row, dict)
+        ], ERR_NONE
+
+    def fetch_filing_detail(self, filing_id: str) -> Tuple[Optional[Dict[str, Any]], str]:
+        if not filing_id:
+            return None, ERR_NONE
+        result = db.surreal_query(
+            f"SELECT * FROM exchange_filing WHERE filingId = '{escape_sql(filing_id)}' LIMIT 1;",
+            timeout=120,
+        )
+        if isinstance(result, dict) and result.get("error"):
+            return None, code(self.id, SUFFIX_WRITE_ERROR)
+        rows = [row for row in _first_result_rows(result) if isinstance(row, dict)]
+        if not rows:
+            return None, ERR_NONE
+        return _detail_from_row(rows[0]), ERR_NONE
+
+    def search_filings(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        where = _search_where(query)
+        order = _ORDER.get(query.order_by, _ORDER["filing_date_desc"])
+        sql = (
+            f"SELECT {_SEARCH_SELECT} FROM exchange_filing WHERE {where} "
+            f"ORDER BY {order} START {offset} LIMIT {limit};"
+        )
+        result = db.surreal_query(sql, timeout=300)
+        if isinstance(result, dict) and result.get("error"):
+            return [], code(self.id, SUFFIX_WRITE_ERROR)
+        return [
+            _detail_from_row(row)
+            for row in _first_result_rows(result)
+            if isinstance(row, dict) and row.get("filingId") is not None
+        ], ERR_NONE
+
+    def search_documents(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        rows, err = self.search_filings(query, offset, limit)
+        if err:
+            return [], err
+        for row in rows:
+            row["snippet"] = None
+        return rows, ERR_NONE
+
+    def aggregate_filings(
+        self, group_by: str, query: FilingQuery
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        if group_by not in AGGREGATE_GROUPS:
+            return [], code(self.id, SUFFIX_PAYLOAD_ERROR)
+        prop = _GROUP_PROP[group_by]
+        where = _search_where(query)
+        sql = (
+            f"SELECT {prop} AS key, count() AS cnt FROM exchange_filing WHERE {where} "
+            f"GROUP BY {prop} ORDER BY cnt DESC LIMIT 200;"
+        )
+        result = db.surreal_query(sql, timeout=300)
+        if isinstance(result, dict) and result.get("error"):
+            return [], code(self.id, SUFFIX_WRITE_ERROR)
+        return [
+            {"key": row.get("key"), "count": int(row.get("cnt") or 0)}
+            for row in _first_result_rows(result)
+            if isinstance(row, dict)
+        ], ERR_NONE
+
+    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+        # ``stock_name`` is not aggregated (SurrealDB has no string max); it is null here.
+        sql = (
+            "SELECT companyTicker, count() AS cnt FROM exchange_filing "
+            "WHERE companyTicker IS NOT NONE "
+            f"GROUP BY companyTicker ORDER BY cnt DESC START {offset} LIMIT {limit};"
+        )
+        result = db.surreal_query(sql, timeout=300)
+        if isinstance(result, dict) and result.get("error"):
+            return [], code(self.id, SUFFIX_WRITE_ERROR)
+        return [
+            {
+                "company_ticker": row.get("companyTicker", ""),
+                "stock_name": None,
+                "filing_count": int(row.get("cnt") or 0),
             }
             for row in _first_result_rows(result)
             if isinstance(row, dict)

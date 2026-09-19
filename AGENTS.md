@@ -54,6 +54,7 @@ Phase 1 is always followed by Phase 2 unless `--metadata-only` is passed. `--bac
 | `sinks/neo4j.py` | Graph sink (`MERGE` nodes/relationships, Cypher reads) |
 | `sinks/surrealdb.py` | SurrealDB adapter: SurrealQL, `RELATE`, RPC→`/sql` document fallback, company-id resolution |
 | `graph.py` | `has_filing` and `references_filing` edge dispatch to every edge-capable sink |
+| `mcp_server.py` | Optional read-only MCP server (stdio) exposing a fixed catalog of read tools; imports the `mcp` extra lazily, never writes, never prints to stdout |
 | `utils.py` | Logging, string helpers, filing classification, ticker extraction, company-key helpers |
 
 ## SurrealDB quirks

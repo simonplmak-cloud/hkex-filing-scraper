@@ -12,6 +12,7 @@ never touches ``document_*`` fields.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -20,11 +21,13 @@ from ..utils import ticker_to_record_id
 from .base import (
     EDGE_KINDS,
     ERR_NONE,
+    SEARCH_COLUMNS,
     SUFFIX_DRIVER_MISSING,
     SUFFIX_DSN_MISSING,
     SUFFIX_PAYLOAD_ERROR,
     SUFFIX_SCHEMA_ERROR,
     SUFFIX_WRITE_ERROR,
+    FilingQuery,
     Sink,
     SinkCapabilities,
     code,
@@ -77,6 +80,89 @@ _DOCUMENT_FIELDS = (
     "document_status_reason",
 )
 
+# Metadata + document projection for a single-filing read.
+_DETAIL_FIELDS = (*_METADATA_FIELDS, *_DOCUMENT_FIELDS)
+
+_SEARCH_PROJECTION = {field: 1 for field in SEARCH_COLUMNS}
+_SEARCH_PROJECTION["_id"] = 0
+
+_SORT = {
+    "filing_date_desc": [("filing_date", -1), ("filing_id", 1)],
+    "filing_date_asc": [("filing_date", 1), ("filing_id", 1)],
+    "title_asc": [("title", 1), ("filing_id", 1)],
+    "filing_id_asc": [("filing_id", 1)],
+}
+
+
+def _day_bounds(value: str, end: bool = False) -> Optional[datetime]:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if end:
+        return parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return parsed
+
+
+def _query_filter(query: FilingQuery) -> Dict[str, Any]:
+    clauses: List[Dict[str, Any]] = []
+    if query.tickers:
+        clauses.append({"company_ticker": {"$in": list(query.tickers)}})
+    if query.stock_codes:
+        clauses.append({"stock_code": {"$in": list(query.stock_codes)}})
+    if query.title_query:
+        clauses.append({"title": {"$regex": re.escape(query.title_query), "$options": "i"}})
+    if query.text_query:
+        clauses.append({"document_text": {"$regex": re.escape(query.text_query), "$options": "i"}})
+    if query.filing_types:
+        clauses.append({"filing_type": {"$in": list(query.filing_types)}})
+    if query.filing_categories:
+        clauses.append({"filing_category": {"$in": list(query.filing_categories)}})
+    if query.document_status:
+        real = [s for s in query.document_status if s and s != "unprocessed"]
+        status_parts: List[Dict[str, Any]] = []
+        if real:
+            status_parts.append({"document_status": {"$in": real}})
+        if any(s == "unprocessed" for s in query.document_status):
+            status_parts.append({"document_status": None})
+        if status_parts:
+            clauses.append({"$or": status_parts} if len(status_parts) > 1 else status_parts[0])
+    if query.exchange:
+        clauses.append({"exchange": query.exchange})
+    if query.source:
+        clauses.append({"source": query.source})
+    if query.document_type:
+        clauses.append({"document_type": query.document_type})
+    if query.referenced_ticker:
+        clauses.append(
+            {"referenced_tickers": {"$regex": re.escape(query.referenced_ticker), "$options": "i"}}
+        )
+    if query.date_from or query.date_to:
+        date_clause: Dict[str, Any] = {}
+        start = _day_bounds(query.date_from) if query.date_from else None
+        end = _day_bounds(query.date_to, end=True) if query.date_to else None
+        if start is not None:
+            date_clause["$gte"] = start
+        if end is not None:
+            date_clause["$lte"] = end
+        if date_clause:
+            clauses.append({"filing_date": date_clause})
+    if not clauses:
+        return {}
+    if len(clauses) == 1:
+        return clauses[0]
+    return {"$and": clauses}
+
+
+def _snippet(text: str, needle: str) -> str:
+    low = text.lower()
+    index = low.find(needle.lower())
+    if index < 0:
+        return text[:320]
+    start = max(0, index - 80)
+    return text[start : start + 320]
+
+
 _INDEXES = (
     ("company_ticker",),
     ("stock_code",),
@@ -97,6 +183,7 @@ class MongoDBSink(Sink):
         arrays=True,
         transactions=False,
         bulk=True,
+        snippets=True,
     )
 
     def __init__(self) -> None:
@@ -377,15 +464,22 @@ class MongoDBSink(Sink):
             return [], redact(str(exc)) or code(self.id, SUFFIX_WRITE_ERROR)
 
     def fetch_titles(
-        self, ticker_set: Optional[List[str]], offset: int, page_size: int
+        self,
+        ticker_set: Optional[List[str]],
+        offset: int,
+        page_size: int,
+        title_query: str = "",
     ) -> Tuple[List[Dict[str, Any]], str]:
         db, err = self._database()
         if err:
             return [], err
+        clauses: List[Dict[str, Any]] = []
         if ticker_set is not None:
-            query: Dict[str, Any] = {"company_ticker": {"$in": list(ticker_set)}}
-        else:
-            query = {"title": {"$nin": [None, ""]}}
+            clauses.append({"company_ticker": {"$in": list(ticker_set)}})
+        clauses.append({"title": {"$nin": [None, ""]}})
+        if title_query:
+            clauses.append({"title": {"$regex": re.escape(title_query), "$options": "i"}})
+        query: Dict[str, Any] = {"$and": clauses} if len(clauses) > 1 else clauses[0]
         try:
             cursor = (
                 db[FILING_COLLECTION]
@@ -398,6 +492,122 @@ class MongoDBSink(Sink):
                 .limit(page_size)
             )
             return [dict(row) for row in cursor], ERR_NONE
+        except Exception as exc:  # noqa: BLE001
+            return [], redact(str(exc)) or code(self.id, SUFFIX_WRITE_ERROR)
+
+    def fetch_filing_detail(self, filing_id: str) -> Tuple[Optional[Dict[str, Any]], str]:
+        if not filing_id:
+            return None, ERR_NONE
+        db, err = self._database()
+        if err:
+            return None, err
+        try:
+            doc = db[FILING_COLLECTION].find_one(
+                {"_id": filing_id}, {field: 1 for field in _DETAIL_FIELDS}
+            )
+            if doc is None:
+                return None, ERR_NONE
+            doc.pop("_id", None)
+            doc.setdefault("filing_id", filing_id)
+            return doc, ERR_NONE
+        except Exception as exc:  # noqa: BLE001
+            return None, redact(str(exc)) or code(self.id, SUFFIX_WRITE_ERROR)
+
+    def search_filings(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        db, err = self._database()
+        if err:
+            return [], err
+        try:
+            cursor = (
+                db[FILING_COLLECTION]
+                .find(_query_filter(query), _SEARCH_PROJECTION)
+                .sort(_SORT.get(query.order_by, _SORT["filing_date_desc"]))
+                .skip(offset)
+                .limit(limit)
+            )
+            return [dict(row) for row in cursor], ERR_NONE
+        except Exception as exc:  # noqa: BLE001
+            return [], redact(str(exc)) or code(self.id, SUFFIX_WRITE_ERROR)
+
+    def search_documents(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        db, err = self._database()
+        if err:
+            return [], err
+        projection = dict(_SEARCH_PROJECTION)
+        projection["document_text"] = 1
+        try:
+            cursor = (
+                db[FILING_COLLECTION]
+                .find(_query_filter(query), projection)
+                .sort(_SORT.get(query.order_by, _SORT["filing_date_desc"]))
+                .skip(offset)
+                .limit(limit)
+            )
+            rows = []
+            for row in cursor:
+                row = dict(row)
+                text = row.pop("document_text", "") or ""
+                row["snippet"] = _snippet(text, query.text_query)
+                rows.append(row)
+            return rows, ERR_NONE
+        except Exception as exc:  # noqa: BLE001
+            return [], redact(str(exc)) or code(self.id, SUFFIX_WRITE_ERROR)
+
+    def aggregate_filings(
+        self, group_by: str, query: FilingQuery
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        from .base import AGGREGATE_GROUPS
+
+        if group_by not in AGGREGATE_GROUPS:
+            return [], code(self.id, SUFFIX_PAYLOAD_ERROR)
+        db, err = self._database()
+        if err:
+            return [], err
+        try:
+            pipeline = [
+                {"$match": _query_filter(query)},
+                {"$group": {"_id": f"${group_by}", "count": {"$sum": 1}}},
+                {"$sort": {"count": -1, "_id": 1}},
+                {"$limit": 200},
+            ]
+            rows = db[FILING_COLLECTION].aggregate(pipeline)
+            return [
+                {"key": row.get("_id"), "count": int(row.get("count") or 0)} for row in rows
+            ], ERR_NONE
+        except Exception as exc:  # noqa: BLE001
+            return [], redact(str(exc)) or code(self.id, SUFFIX_WRITE_ERROR)
+
+    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+        db, err = self._database()
+        if err:
+            return [], err
+        try:
+            pipeline = [
+                {"$match": {"company_ticker": {"$nin": [None, ""]}}},
+                {
+                    "$group": {
+                        "_id": "$company_ticker",
+                        "stock_name": {"$first": "$stock_name"},
+                        "filing_count": {"$sum": 1},
+                    }
+                },
+                {"$sort": {"filing_count": -1, "_id": 1}},
+                {"$skip": offset},
+                {"$limit": limit},
+            ]
+            rows = db[FILING_COLLECTION].aggregate(pipeline)
+            return [
+                {
+                    "company_ticker": row.get("_id", ""),
+                    "stock_name": row.get("stock_name"),
+                    "filing_count": int(row.get("filing_count") or 0),
+                }
+                for row in rows
+            ], ERR_NONE
         except Exception as exc:  # noqa: BLE001
             return [], redact(str(exc)) or code(self.id, SUFFIX_WRITE_ERROR)
 

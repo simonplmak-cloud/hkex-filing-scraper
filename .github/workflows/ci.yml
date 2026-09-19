@@ -50,7 +50,7 @@ jobs:
         run: |
           uv export --frozen --no-dev --no-hashes --no-emit-project \
             --extra excel --extra postgres --extra mysql --extra duckdb \
-            --extra mongodb --extra clickhouse --extra neo4j \
+            --extra mongodb --extra clickhouse --extra neo4j --extra mcp \
             --output-file /tmp/requirements-runtime.txt
       - name: Audit the locked set for known vulnerabilities
         run: uvx --from pip-audit pip-audit --strict --requirement /tmp/requirements-runtime.txt
@@ -69,7 +69,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install -e ".[dev,duckdb]"
+        run: pip install -e ".[dev,duckdb,mcp]"
       - name: pytest with the coverage gate
         run: pytest -q --cov --cov-branch --cov-report=term-missing --cov-report=xml
       - name: Keep the coverage report
@@ -166,7 +166,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install
-        run: pip install -e ".[dev,duckdb]"
+        run: pip install -e ".[dev,duckdb,mcp]"
       - name: pytest
         run: pytest -q
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from .. import db_postgres
-from .base import Sink, SinkCapabilities
+from .base import FilingQuery, Sink, SinkCapabilities
 
 
 class PostgresSink(Sink):
@@ -23,6 +23,7 @@ class PostgresSink(Sink):
         json=True,
         arrays=True,
         transactions=True,
+        snippets=True,
     )
 
     def available(self) -> bool:
@@ -40,7 +41,11 @@ class PostgresSink(Sink):
         )
 
     def ensure_schema(self) -> Tuple[bool, str]:
-        return db_postgres.initialize_postgres_schema()
+        ok, code = db_postgres.initialize_postgres_schema()
+        if ok:
+            # Optional; logs a warning and never blocks a usable schema.
+            db_postgres.ensure_search_indexes()
+        return ok, code
 
     def close(self) -> None:
         db_postgres.close_pool()
@@ -82,9 +87,34 @@ class PostgresSink(Sink):
         return db_postgres.fetch_filing_ids_by_ticker(tickers)
 
     def fetch_titles(
-        self, ticker_set: Optional[List[str]], offset: int, page_size: int
+        self,
+        ticker_set: Optional[List[str]],
+        offset: int,
+        page_size: int,
+        title_query: str = "",
     ) -> Tuple[List[Dict[str, Any]], str]:
-        return db_postgres.fetch_titles(ticker_set, offset, page_size)
+        return db_postgres.fetch_titles(ticker_set, offset, page_size, title_query)
+
+    def fetch_filing_detail(self, filing_id: str) -> Tuple[Optional[Dict[str, Any]], str]:
+        return db_postgres.fetch_filing_detail(filing_id)
+
+    def search_filings(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        return db_postgres.search_filings(query, offset, limit)
+
+    def search_documents(
+        self, query: FilingQuery, offset: int, limit: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        return db_postgres.search_documents(query, offset, limit)
+
+    def aggregate_filings(
+        self, group_by: str, query: FilingQuery
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        return db_postgres.aggregate_filings(group_by, query)
+
+    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+        return db_postgres.list_companies(limit, offset)
 
     def fetch_coverage(self) -> Tuple[List[Dict[str, Any]], str]:
         return db_postgres.fetch_coverage()
