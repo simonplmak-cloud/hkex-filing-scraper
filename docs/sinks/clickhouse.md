@@ -2,7 +2,7 @@
 
 Persist filings, document payloads, coverage rows, and graph edges to ClickHouse.
 
-- Licence: **Apache-2.0** — OSI-approved open source.
+- License: **Apache-2.0** — OSI-approved open source.
 - Driver: [`clickhouse-connect`](https://pypi.org/project/clickhouse-connect/) (HTTP).
 - Extra: `clickhouse`.
 

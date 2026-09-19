@@ -41,19 +41,20 @@ The model cannot raise these:
 
 ## Connecting a client
 
-The gateway speaks **Streamable HTTP** (stateless, JSON responses) at `/mcp` and needs no
-authentication.
+The gateway speaks **Streamable HTTP** (stateless, JSON responses) at `/api/mcp` and needs no
+authentication. The full client list — Claude, ChatGPT, Cursor, Copilot, Gemini, opencode,
+Manus, and Perplexity — is in [AI agent support](ai-agents.md).
 
 **opencode** (`opencode.json`):
 
 ```json
 {
+  "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "servers": {
-      "hkex-filings-live": {
-        "type": "remote",
-        "url": "https://hkex-listco-updates.ascent-partners.com/api/mcp"
-      }
+    "hkex-live": {
+      "type": "remote",
+      "url": "https://hkex-listco-updates.ascent-partners.com/api/mcp",
+      "enabled": true
     }
   }
 }
@@ -67,9 +68,9 @@ authentication.
 ```json
 {
   "mcpServers": {
-    "hkex-filings-live": {
-      "url": "https://hkex-listco-updates.ascent-partners.com/api/mcp"
-    }
+      "hkex-live": {
+        "url": "https://hkex-listco-updates.ascent-partners.com/api/mcp"
+      }
   }
 }
 ```
@@ -84,7 +85,6 @@ are:
 - **Origin validation** — requests carrying a disallowed `Origin` are rejected (MCP's
   DNS-rebinding mitigation).
 - **No caching** — responses are sent with `Cache-Control: no-store`.
-- **Edge rate limiting** — the deployment applies WAF rate limiting on `/api/mcp`.
 - **Liveness** — `GET /api/healthz` returns `{"ok":true}` and reads nothing.
 - **Bounded responses** — the limits above keep every response well within the platform body
   limit.

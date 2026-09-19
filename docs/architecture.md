@@ -118,4 +118,6 @@ flowchart TD
 | `sinks/surrealdb.py` | SurrealQL, `RELATE`, RPC→`/sql` fallback, company-id resolution |
 | `graph.py` | Edge dispatch to every edge-capable sink |
 | `mcp_server.py` | Optional read-only MCP server (stdio) exposing a fixed catalog of read tools |
+| `live_mcp.py` | Live, database-free MCP tools + a hand-rolled Streamable HTTP JSON-RPC transport |
+| `api/mcp.py`, `api/healthz.py` | Vercel WSGI entry points for the hosted gateway (stdlib only) |
 | `utils.py` | Logging, classification, ticker extraction, company-key helpers |

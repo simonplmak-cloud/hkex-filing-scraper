@@ -30,7 +30,7 @@ by, or sponsored by Hong Kong Exchanges and Clearing Limited (HKEX).
 4. **Attribution.** HKEx is the source of the underlying filings. Do not present the data as
    your own, and retain provenance (`source = 'HKEx'`, `documentUrl`, `filingId`).
 
-## Licence of this software
+## License of this software
 
 MIT — see [LICENSE](https://github.com/simonplmak-cloud/hkex-filing-scraper/blob/main/LICENSE). The MIT license covers **this code only**, not any HKEx data
 you collect with it.
