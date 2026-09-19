@@ -1,13 +1,5 @@
-# Vercel deployment manifest (repo-root project: docs site + live MCP function).
-# The gateway depends on the published package, not the local source tree, so a deploy
-# always runs a released, reproducible artifact. Native/ML dependencies are pinned exactly
-# so the function bundle is byte-for-byte reproducible across deploys.
-hkex-filing-scraper==2.3.0
-fastapi==0.141.1
-PyMuPDF==1.28.2
-pymupdf4llm==1.28.2
-onnxruntime==1.30.0
-numpy==2.4.6
-openpyxl==3.1.5
-# Build-only (the docs site); not imported by the function.
+# Vercel build dependencies.
+# Vercel bundles the Python *functions* from the project's own dependency graph
+# (pyproject.toml + uv.lock), not from this file — so this file only needs the docs
+# toolchain used by `buildCommand` (`mkdocs build --strict`).
 mkdocs-material==9.7.7

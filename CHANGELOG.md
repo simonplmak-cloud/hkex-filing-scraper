@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`get_server_info`, `search_filings`, `get_filing`), fetching fresh data from HKEx on every
   call. The transport is implemented directly — no SDK, no session state, no ASGI lifespan —
   and is guarded by an SSRF host allowlist, an Origin allowlist, and response caps. The
-  Vercel entry point is `api/mcp.py`, deployed at `/mcp`. See [docs/live-mcp.md](docs/live-mcp.md).
+  Vercel entry point is `api/mcp.py`, deployed at `/api/mcp`. See [docs/live-mcp.md](docs/live-mcp.md).
 
 ### Changed
 

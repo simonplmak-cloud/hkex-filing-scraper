@@ -8,7 +8,7 @@ gateway is **stateless**, stores nothing, and needs no database.
 Endpoint:
 
 ```text
-https://hkex-listco-updates.ascent-partners.com/mcp
+https://hkex-listco-updates.ascent-partners.com/api/mcp
 ```
 
 ## Tools
@@ -46,7 +46,7 @@ authentication.
     "servers": {
       "hkex-filings-live": {
         "type": "remote",
-        "url": "https://hkex-listco-updates.ascent-partners.com/mcp"
+        "url": "https://hkex-listco-updates.ascent-partners.com/api/mcp"
       }
     }
   }
@@ -62,7 +62,7 @@ authentication.
 {
   "mcpServers": {
     "hkex-filings-live": {
-      "url": "https://hkex-listco-updates.ascent-partners.com/mcp"
+      "url": "https://hkex-listco-updates.ascent-partners.com/api/mcp"
     }
   }
 }
@@ -78,7 +78,8 @@ are:
 - **Origin validation** — requests carrying a disallowed `Origin` are rejected (MCP's
   DNS-rebinding mitigation).
 - **No caching** — responses are sent with `Cache-Control: no-store`.
-- **Edge rate limiting** — the deployment applies WAF rate limiting on `/mcp`.
+- **Edge rate limiting** — the deployment applies WAF rate limiting on `/api/mcp`.
+- **Liveness** — `GET /api/healthz` returns `{"ok":true}` and reads nothing.
 - **Bounded responses** — the limits above keep every response well within the platform body
   limit.
 
