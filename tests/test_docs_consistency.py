@@ -2,7 +2,8 @@
 
 This is the control for risk R4 (docs ↔ code drift). It fails a PR when a sink is
 added, removed, or renamed without updating the docs, templates, or the env
-template.
+template. It also checks the MCP tool catalogs (stdio and live), the live-gateway
+endpoint, the CLI flags, and the hand-maintained ``docs/llms.txt`` index.
 """
 
 from __future__ import annotations
@@ -211,3 +212,85 @@ class TestDocumentationStyle:
         # sense (hatchling), which does not appear in these files.
         offenders = [rel for rel in self.STYLE_FILES if "backend" in _read(rel).lower()]
         assert not offenders, f"use 'sink' instead of 'backend' in: {', '.join(offenders)}"
+
+
+# --- MCP, live gateway, CLI, and the LLM index ---------------------------------
+def _site_domain() -> str:
+    for line in _read("mkdocs.yml").splitlines():
+        if line.startswith("site_url:"):
+            return line.split(":", 1)[1].strip().rstrip("/")
+    raise AssertionError("mkdocs.yml has no site_url")
+
+
+class TestLiveGatewayDocs:
+    """The live-gateway docs must match the deployed endpoint and the tool catalog."""
+
+    def test_documented_endpoint_matches_the_docs_domain(self):
+        domain = _site_domain()
+        for rel in ("docs/live-mcp.md", "docs/ai-agents.md", "README.md"):
+            assert f"{domain}/api/mcp" in _read(rel), f"{rel} must use the /api/mcp endpoint"
+
+    def test_live_tool_catalog_matches_the_docs(self):
+        from hkex_scraper import live_mcp
+
+        names = [tool["name"] for tool in live_mcp.TOOL_SCHEMAS]
+        assert names == ["get_server_info", "search_filings", "get_filing"]
+        for rel in ("docs/live-mcp.md", "docs/ai-agents.md"):
+            doc = _read(rel)
+            missing = [name for name in names if f"`{name}`" not in doc]
+            assert not missing, f"{rel} does not document live tools: {missing}"
+
+    def test_api_entry_point_uses_the_shared_transport(self):
+        assert "handle_jsonrpc" in _read("api/mcp.py"), (
+            "api/mcp.py must delegate to live_mcp.handle_jsonrpc so the wire format stays shared"
+        )
+
+
+class TestMcpCatalogDocs:
+    """docs/mcp.md must list every stdio MCP tool."""
+
+    def test_tool_names_match_the_catalog(self):
+        from hkex_scraper import mcp_server
+
+        names = [tool.__name__ for tool in mcp_server.TOOLS]
+        doc = _read("docs/mcp.md")
+        missing = [name for name in names if f"`{name}`" not in doc]
+        assert not missing, f"docs/mcp.md does not list MCP tools: {missing}"
+
+
+class TestCliFlagsDocs:
+    """Every argparse flag must be documented in docs/cli.md, and vice versa."""
+
+    def test_flags_match_the_cli_doc(self):
+        source_flags = set(re.findall(r'"(--[a-z][a-z-]*)"', _read("src/hkex_scraper/main.py")))
+        assert source_flags, "no CLI flags found in main.py"
+        doc = _read("docs/cli.md")
+        missing = sorted(f for f in source_flags if f"`{f}" not in doc)
+        assert not missing, f"docs/cli.md does not document flags: {missing}"
+        documented = set(re.findall(r"`(--[a-z][a-z-]*)", doc))
+        unknown = sorted(documented - source_flags)
+        assert not unknown, f"docs/cli.md documents flags that main.py does not define: {unknown}"
+
+
+class TestLlmsIndex:
+    """docs/llms.txt is hand-maintained, so its links must resolve to real pages."""
+
+    def test_links_resolve_to_existing_pages(self):
+        domain = _site_domain()
+        urls = re.findall(r"\((https://[^)\s]+)\)", _read("docs/llms.txt"))
+        assert urls, "docs/llms.txt has no links"
+        generated = {"llms.txt", "llms-full.txt"}
+        for url in urls:
+            assert url.startswith(f"{domain}/"), f"llms.txt link is outside the docs domain: {url}"
+            slug = url[len(domain) + 1 :].strip("/")
+            if slug in generated:
+                continue
+            candidates = [
+                ROOT / "docs" / f"{slug}.md",
+                ROOT / "docs" / slug / "README.md",
+            ]
+            if slug == "":
+                candidates.append(ROOT / "docs" / "index.md")
+            assert any(candidate.exists() for candidate in candidates), (
+                f"docs/llms.txt links to a page that does not exist: {url}"
+            )
