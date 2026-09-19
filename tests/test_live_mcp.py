@@ -99,6 +99,7 @@ class TestHandleTool:
         assert info["transport"] == "streamable-http"
         assert info["storage"] == "none"
         assert info["read_only"] is True
+        assert "extraction" in info
 
 
 class TestSearchFilings:

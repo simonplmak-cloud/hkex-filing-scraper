@@ -8,7 +8,7 @@ gateway is **stateless**, stores nothing, and needs no database.
 Endpoint:
 
 ```text
-https://hkex-listco-updates.ascent-partners.com/mcp
+https://hkex-listco-updates.ascent-partners.com/api/mcp
 ```
 
 ## Tools
@@ -46,7 +46,7 @@ authentication.
     "servers": {
       "hkex-filings-live": {
         "type": "remote",
-        "url": "https://hkex-listco-updates.ascent-partners.com/mcp"
+        "url": "https://hkex-listco-updates.ascent-partners.com/api/mcp"
       }
     }
   }
@@ -62,7 +62,7 @@ authentication.
 {
   "mcpServers": {
     "hkex-filings-live": {
-      "url": "https://hkex-listco-updates.ascent-partners.com/mcp"
+      "url": "https://hkex-listco-updates.ascent-partners.com/api/mcp"
     }
   }
 }
@@ -78,7 +78,8 @@ are:
 - **Origin validation** — requests carrying a disallowed `Origin` are rejected (MCP's
   DNS-rebinding mitigation).
 - **No caching** — responses are sent with `Cache-Control: no-store`.
-- **Edge rate limiting** — the deployment applies WAF rate limiting on `/mcp`.
+- **Edge rate limiting** — the deployment applies WAF rate limiting on `/api/mcp`.
+- **Liveness** — `GET /api/healthz` returns `{"ok":true}` and reads nothing.
 - **Bounded responses** — the limits above keep every response well within the platform body
   limit.
 
@@ -88,6 +89,18 @@ The gateway is a single Python function on Vercel, deployed from this repository
 the documentation site. The transport is implemented directly in
 `src/hkex_scraper/live_mcp.py` (it needs no server SDK and no ASGI lifespan), and the Vercel
 entry point is `api/mcp.py`.
+
+The project is linked to GitHub, so deployment is automatic: pushes to `main` deploy to
+production (`https://hkex-listco-updates.ascent-partners.com/`), and every other branch or
+pull request deploys an isolated preview. The function runs in the Hong Kong region (`hkg1`)
+with a Singapore failover (`sin1`), and it is configured with Fluid compute so document
+extraction can run within the function's execution budget.
+
+The document-extraction libraries (`PyMuPDF`, `pymupdf4llm`, `openpyxl`) are AGPL-3.0, so
+they are not published dependencies of the distribution (see [Legal](legal.md)); the
+deployment installs them through the `deploy` dependency group in `pyproject.toml`.
+`pymupdf4llm` is pinned to a release that depends only on PyMuPDF — its 1.x line pulls an
+additional layout model (onnxruntime and numpy) that exceeds the serverless bundle limit.
 
 ## See also
 
