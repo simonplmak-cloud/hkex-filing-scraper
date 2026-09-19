@@ -21,14 +21,18 @@ theme:
   features:
     - navigation.sections
     - navigation.top
+    - navigation.footer
+    - content.action.edit
     - content.code.copy
     - search.suggest
+    - search.share
 extra_css:
   - assets/stylesheets/terminal.css
 extra_javascript:
   # Gives Material's unlabelled search toggle an accessible name (WCAG 2.2, axe `label`).
   - assets/javascripts/a11y.js
 markdown_extensions:
+  - meta
   - admonition
   - tables
   - toc:
@@ -63,6 +67,7 @@ nav:
   - Testing: testing.md
   - Project:
       - Style guide: STYLE.md
+      - Roadmap: roadmap.md
       - De-risking: de-risking.md
       - Legal: legal.md
       - Upgrading: upgrading.md

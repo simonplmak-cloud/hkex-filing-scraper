@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="474" viewBox="0 0 900 474" role="img" aria-label="Terminal session: install the scraper, scrape filings into SQLite, then query the hosted MCP gateway from an AI agent">
+  <rect width="900" height="474" rx="10" fill="#0d1117"/>
+  <rect width="900" height="34" rx="10" fill="#161b22"/>
+  <rect y="24" width="900" height="10" fill="#161b22"/>
+  <circle cx="24" cy="17" r="6" fill="#ff5f56"/>
+  <circle cx="44" cy="17" r="6" fill="#ffbd2e"/>
+  <circle cx="64" cy="17" r="6" fill="#27c93f"/>
+  <text x="88" y="22" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#8b949e">hkex-filing-scraper — quickstart</text>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="15">
+    <text x="26" y="70" fill="#27c93f">$</text>
+    <text x="46" y="70" fill="#e6edf3">pip install hkex-filing-scraper</text>
+    <text x="46" y="94" fill="#8b949e">Successfully installed hkex-filing-scraper requests beautifulsoup4</text>
+
+    <text x="26" y="132" fill="#27c93f">$</text>
+    <text x="46" y="132" fill="#e6edf3">DATABASE_TARGET=sqlite SQLITE_PATH=hkex.db hkex-scraper --metadata-only --limit 50</text>
+    <text x="46" y="156" fill="#c9d1d9">Phase 1  metadata   50 filings  ->  sqlite</text>
+    <text x="46" y="178" fill="#c9d1d9">         coverage   1 chunk     ingested 50/50 (100%)</text>
+    <text x="46" y="200" fill="#8b949e">Done in 6.2s · 9 sinks available, 1 configured</text>
+
+    <text x="26" y="238" fill="#27c93f">$</text>
+    <text x="46" y="238" fill="#e6edf3">claude mcp add --transport http hkex-live \</text>
+    <text x="46" y="260" fill="#e6edf3">    https://hkex-listco-updates.ascent-partners.com/api/mcp</text>
+    <text x="46" y="284" fill="#79c0ff">✓ hkex-live connected · 3 tools (get_server_info, search_filings, get_filing)</text>
+
+    <text x="26" y="322" fill="#27c93f">&gt;</text>
+    <text x="46" y="322" fill="#e6edf3">use hkex-live to summarise the 2026 interim report for stock code 0005</text>
+    <text x="46" y="346" fill="#8b949e">search_filings  {from_date: "2026-09-01", to_date: "2026-09-18", stock_code: "0005"}</text>
+    <text x="46" y="368" fill="#8b949e">get_filing      {link: "…/2026091801922.pdf", extract: true}</text>
+
+    <text x="46" y="400" fill="#7ee787">“## Hong Kong Exchanges and Clearing Limited …”  7,073 chars · 2 tables</text>
+    <text x="46" y="424" fill="#6e7681">Live from HKEx. Nothing stored. Read-only.</text>
+    <text x="26" y="458" fill="#27c93f">$</text>
+    <rect x="38" y="446" width="9" height="16" fill="#e6edf3"/>
+  </g>
+</svg>

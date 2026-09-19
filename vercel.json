@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "fluid": true,
-  "buildCommand": "mkdocs build --strict",
+  "buildCommand": "mkdocs build --strict && python3 scripts/build_llms.py",
   "outputDirectory": "site",
   "functions": {
     "api/**/*.py": {

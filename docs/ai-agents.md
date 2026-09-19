@@ -1,3 +1,7 @@
+---
+description: Connect the live HKEx MCP gateway from Claude, ChatGPT, Cursor, VS Code/Copilot, Gemini CLI, opencode, Manus, and Perplexity.
+---
+
 # AI agent support
 
 The [live MCP gateway](live-mcp.md) is a standard, public, read-only MCP server, so any

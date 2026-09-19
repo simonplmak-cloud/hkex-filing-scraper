@@ -25,6 +25,8 @@
   "ignores": [
     "node_modules/**",
     ".venv/**",
+    "build/**",
+    "site/**",
     "vdd/**",
     "docs/releases/**",
     "CHANGELOG.md"

@@ -44,6 +44,8 @@ jobs:
         run: pip install "mkdocs-material>=9.5"
       - name: Build
         run: mkdocs build --strict
+      - name: Build the LLM full-text bundle
+        run: python3 scripts/build_llms.py
 
   supply-chain:
     name: Supply chain
