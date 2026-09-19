@@ -33,6 +33,7 @@ SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         "Getting started",
         [
             ("getting-started.md", "Getting-Started"),
+            ("news.md", "Whats-New"),
         ],
     ),
     (

@@ -47,6 +47,7 @@ markdown_extensions:
   - pymdownx.highlight
 nav:
   - Home: index.md
+  - What's new: news.md
   - Getting started: getting-started.md
   - Sinks:
       - Overview: sinks/README.md

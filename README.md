@@ -26,6 +26,8 @@ regulatory filings and ingests them into **any combination of nine databases** �
 full-text and table extraction, chunk-level coverage, optional graph linking, and a
 **read-only MCP server** so AI agents can query the corpus or the live site.
 
+<!-- mcp-name: io.github.simonplmak-cloud/hkex-filings -->
+
 It speaks the undocumented HKEx JSON API directly, which is faster and more resilient than
 driving a browser.
 
@@ -76,7 +78,9 @@ then summarise the interim report.
 
 Ready-made configuration for Claude, ChatGPT, Cursor, VS Code/Copilot, Gemini CLI, opencode,
 Manus, and Perplexity is in [AI agent support](docs/ai-agents.md) — and for a stored corpus,
-the [stdio MCP server](docs/mcp.md) exposes a wider tool catalog.
+the [stdio MCP server](docs/mcp.md) exposes a wider tool catalog. The gateway is listed in the
+[official MCP Registry](https://registry.modelcontextprotocol.io/) as
+`io.github.simonplmak-cloud/hkex-filings`.
 
 ## Quick start (local)
 
@@ -182,7 +186,7 @@ Deeper detail: [Architecture](docs/architecture.md) · [ADR 0002](docs/adr/0002-
 - [Live MCP gateway](docs/live-mcp.md) · [AI agent support](docs/ai-agents.md) · [MCP server](docs/mcp.md)
 - [Architecture](docs/architecture.md) · [Troubleshooting](docs/troubleshooting.md) · [Testing](docs/testing.md)
 - [Roadmap](docs/roadmap.md) · [De-risking register](docs/de-risking.md) · [Upgrading](docs/upgrading.md)
-- [Releasing](docs/releasing.md) · [Legal & Terms of Use](docs/legal.md) · [Changelog](CHANGELOG.md)
+- [What's new](docs/news.md) · [Releasing](docs/releasing.md) · [Legal & Terms of Use](docs/legal.md) · [Changelog](CHANGELOG.md)
 - **Docs site:** <https://hkex-listco-updates.ascent-partners.com/> · [Try it locally (`examples/`)](examples/README.md)
 
 ## Development

@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-09-20
+
+### Added
+
+- **AI agent support guide.** [docs/ai-agents.md](docs/ai-agents.md) documents how to connect
+  the live gateway from Claude Code, Claude Desktop, ChatGPT, Cursor, VS Code (GitHub
+  Copilot), Gemini CLI, opencode, Manus, Perplexity, any MCP SDK client, and stdio-only
+  clients via `mcp-remote`.
+- **Published to the official MCP Registry** as `io.github.simonplmak-cloud/hkex-filings`;
+  `server.json` declares both the hosted remote endpoint and the PyPI package.
+
+### Changed
+
+- **Broader MCP client compatibility.** The gateway negotiates protocol version `2025-03-26`
+  in addition to `2024-11-05`/`2025-06-18`/`2025-11-25`, answers `resources/list`,
+  `resources/templates/list`, and `prompts/list` with empty lists so probing clients connect
+  cleanly, and allows desktop-shell origins (`null`, `file://`) through the Origin allowlist.
+  Non-POST requests now return an explanatory body and CORS preflight is answered.
+- **Edge rate limiting** on `/api/mcp`: 120 requests per 60 seconds per IP, `429` beyond.
+- **Brand and docs refresh** — a new hero/social card and MCP architecture diagram, per-page
+  meta descriptions, and a docs home hero.
+
+## [2.3.0] - 2026-09-19
+
+### Added
+
+- **Live MCP gateway (Streamable HTTP).** `src/hkex_scraper/live_mcp.py` exposes the same
+  reader as a stateless, database-free HTTP transport with three live tools
+  (`get_server_info`, `search_filings`, `get_filing`), fetching fresh data from HKEx on every
+  call. The transport is implemented directly — no SDK, no session state, no ASGI lifespan —
+  and is guarded by an SSRF host allowlist, an Origin allowlist, and response caps. The
+  Vercel entry point is `api/mcp.py`, deployed at `/api/mcp`. See [docs/live-mcp.md](docs/live-mcp.md).
+
+### Changed
+
+- **Documentation is now served by Vercel** at
+  <https://hkex-listco-updates.ascent-partners.com/> (the docs site and the live MCP gateway
+  share one deployment). GitHub Pages is retired; `mkdocs build --strict` now runs in CI.
+
+## [2.2.0] - 2026-09-19
+
 ### Added
 
 - **Optional read-only MCP server.** `pip install "hkex-filing-scraper[mcp]"` provides
@@ -31,26 +72,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pg_trgm` GIN indexes over `lower(title)` and `lower(document_text)` so substring search
   can use an index bitmap scan. Best effort: a user without privilege logs a warning and
   search falls back to a scan, and schema init is never blocked.
-- **Live MCP gateway (Streamable HTTP).** `src/hkex_scraper/live_mcp.py` exposes the same
-  reader as a stateless, database-free HTTP transport with three live tools
-  (`get_server_info`, `search_filings`, `get_filing`), fetching fresh data from HKEx on every
-  call. The transport is implemented directly — no SDK, no session state, no ASGI lifespan —
-  and is guarded by an SSRF host allowlist, an Origin allowlist, and response caps. The
-  Vercel entry point is `api/mcp.py`, deployed at `/api/mcp`. See [docs/live-mcp.md](docs/live-mcp.md).
-- **AI agent support guide.** [docs/ai-agents.md](docs/ai-agents.md) documents how to connect
-  the live gateway from Claude Code, Claude Desktop, ChatGPT, Cursor, VS Code (GitHub
-  Copilot), Gemini CLI, opencode, Manus, Perplexity, any MCP SDK client, and stdio-only
-  clients via `mcp-remote`. The gateway negotiates protocol version `2025-03-26` in addition
-  to `2024-11-05`/`2025-06-18`/`2025-11-25`, answers `resources/list`,
-  `resources/templates/list`, and `prompts/list` with empty lists so probing clients connect
-  cleanly, and allows desktop-shell origins (`null`, `file://`) through the Origin allowlist.
-  Non-POST requests now return an explanatory body and CORS preflight is answered.
-
-### Changed
-
-- **Documentation is now served by Vercel** at
-  <https://hkex-listco-updates.ascent-partners.com/> (the docs site and the live MCP gateway
-  share one deployment). GitHub Pages is retired; `mkdocs build --strict` now runs in CI.
 
 ## [2.1.0] - 2026-09-17
 
