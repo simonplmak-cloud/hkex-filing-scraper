@@ -4,7 +4,6 @@
   "outputDirectory": "site",
   "functions": {
     "api/mcp.py": {
-      "runtime": "python3.12",
       "maxDuration": 60,
       "memory": 1024,
       "regions": ["hkg1"],
