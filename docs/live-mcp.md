@@ -110,5 +110,6 @@ additional layout model (onnxruntime and numpy) that exceeds the serverless bund
 
 ## See also
 
+- [AI agent support](ai-agents.md) — configuration for Claude, ChatGPT, Cursor, Copilot, Gemini, opencode, Manus, and Perplexity.
 - [MCP server](mcp.md) — the stdio server over a stored corpus.
 - [Configuration](configuration.md) — environment variables for the CLI and sinks.

@@ -37,6 +37,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   call. The transport is implemented directly — no SDK, no session state, no ASGI lifespan —
   and is guarded by an SSRF host allowlist, an Origin allowlist, and response caps. The
   Vercel entry point is `api/mcp.py`, deployed at `/api/mcp`. See [docs/live-mcp.md](docs/live-mcp.md).
+- **AI agent support guide.** [docs/ai-agents.md](docs/ai-agents.md) documents how to connect
+  the live gateway from Claude Code, Claude Desktop, ChatGPT, Cursor, VS Code (GitHub
+  Copilot), Gemini CLI, opencode, Manus, Perplexity, any MCP SDK client, and stdio-only
+  clients via `mcp-remote`. The gateway negotiates protocol version `2025-03-26` in addition
+  to `2024-11-05`/`2025-06-18`/`2025-11-25`, answers `resources/list`,
+  `resources/templates/list`, and `prompts/list` with empty lists so probing clients connect
+  cleanly, and allows desktop-shell origins (`null`, `file://`) through the Origin allowlist.
+  Non-POST requests now return an explanatory body and CORS preflight is answered.
 
 ### Changed
 
