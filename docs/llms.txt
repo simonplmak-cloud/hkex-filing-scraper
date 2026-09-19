@@ -9,6 +9,7 @@
 ## Getting started
 
 - [Home](https://hkex-listco-updates.ascent-partners.com/): what the project is and where to start.
+- [What's new](https://hkex-listco-updates.ascent-partners.com/news/): dated release notes, newest first.
 - [Getting started](https://hkex-listco-updates.ascent-partners.com/getting-started/): install, quick start, and first run.
 - [Configuration](https://hkex-listco-updates.ascent-partners.com/configuration/): every environment variable and the `DATABASE_TARGET` sink selector.
 - [CLI](https://hkex-listco-updates.ascent-partners.com/cli/): command-line reference and flags.

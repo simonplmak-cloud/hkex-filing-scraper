@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "hkex-filing-scraper"
 dynamic = ["version"]
-description = "Scrape and ingest HKEx (Hong Kong Stock Exchange) regulatory filings into PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Neo4j, ClickHouse, DuckDB, or SurrealDB with full-text extraction and graph linking."
+description = "Scrape and ingest HKEx (Hong Kong Stock Exchange) regulatory filings into nine databases — and query them live from AI agents over MCP."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

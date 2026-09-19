@@ -18,6 +18,7 @@ agents can query HKEx live.
 
 ## Start here
 
+- [What's new](news.md)
 - [Getting started](getting-started.md)
 - [Database sinks (support matrix)](sinks/README.md)
 - [Configuration reference](configuration.md)

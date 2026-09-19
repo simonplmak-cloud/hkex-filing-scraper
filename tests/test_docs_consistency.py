@@ -8,6 +8,7 @@ endpoint, the CLI flags, and the hand-maintained ``docs/llms.txt`` index.
 
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 import struct
@@ -328,3 +329,24 @@ class TestBrandAssets:
 
     def test_readme_shows_the_mcp_diagram(self):
         assert "docs/assets/mcp.png" in _read("README.md")
+
+
+class TestMcpRegistryManifest:
+    """`server.json` publishes the gateway; it must match the docs and the README marker."""
+
+    def _manifest(self) -> dict:
+        return json.loads(_read("server.json"))
+
+    def test_remote_matches_the_documented_endpoint(self):
+        manifest = self._manifest()
+        assert manifest["name"] == "io.github.simonplmak-cloud/hkex-filings"
+        assert manifest["description"].endswith(".")
+        assert f"{_site_domain()}/api/mcp" in [r["url"] for r in manifest["remotes"]]
+
+    def test_package_entry_points_at_this_distribution(self):
+        packages = self._manifest()["packages"]
+        assert any(p["identifier"] == "hkex-filing-scraper" for p in packages)
+
+    def test_readme_carries_the_registry_marker(self):
+        # The registry verifies PyPI ownership by finding this string in the README.
+        assert f"mcp-name: {self._manifest()['name']}" in _read("README.md")
