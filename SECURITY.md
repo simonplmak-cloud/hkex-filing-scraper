@@ -37,6 +37,9 @@ We credit reporters in the release notes unless you ask to stay anonymous.
 In scope:
 
 - The published package and its CLI (`hkex-scraper`).
+- The read-only MCP servers: the stdio server (`hkex-scraper-mcp`) and the hosted live
+  gateway (`https://hkex-listco-updates.ascent-partners.com/api/mcp`) and its
+  documentation site.
 - Credential handling — DSNs and passwords must never appear in logs, errors, or the SQL
   failure log (`sinks/base.py:redact()`, `db_postgres._redact()`).
 - SQL construction — all values must be parameterised; `escape_sql()` is mandatory on every

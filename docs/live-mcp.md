@@ -89,6 +89,8 @@ are:
 - **Origin validation** — requests carrying a disallowed `Origin` are rejected (MCP's
   DNS-rebinding mitigation).
 - **No caching** — responses are sent with `Cache-Control: no-store`.
+- **Rate limiting** — a Vercel Firewall rule limits `/api/mcp` to 120 requests per 60 seconds
+  per IP; excess requests are answered with `429 Too Many Requests`.
 - **Liveness** — `GET /api/healthz` returns `{"ok":true}` and reads nothing.
 - **Bounded responses** — the limits above keep every response well within the platform body
   limit.
