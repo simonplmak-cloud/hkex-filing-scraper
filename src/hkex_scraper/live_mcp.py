@@ -142,6 +142,20 @@ def _cap_tables(tables: List[Any], limit: int) -> Tuple[List[Any], int]:
 # ---------------------------------------------------------------------------
 # Tool bodies (transport-agnostic)
 # ---------------------------------------------------------------------------
+def _extraction_dependencies() -> Dict[str, bool]:
+    """Report which optional PDF/Excel extractors are importable in this environment."""
+    try:
+        from . import extractor
+
+        return {
+            "pymupdf": bool(getattr(extractor, "PYMUPDF_AVAILABLE", False)),
+            "pymupdf4llm": bool(getattr(extractor, "PYMUPDF4LLM_AVAILABLE", False)),
+            "camelot": bool(getattr(extractor, "CAMELOT_AVAILABLE", False)),
+        }
+    except Exception:  # noqa: BLE001 - diagnostic only
+        return {"pymupdf": False, "pymupdf4llm": False, "camelot": False}
+
+
 def _tool_get_server_info() -> Dict[str, Any]:
     return {
         "name": SERVER_NAME,
@@ -150,6 +164,7 @@ def _tool_get_server_info() -> Dict[str, Any]:
         "live": True,
         "storage": "none",
         "read_only": True,
+        "extraction": _extraction_dependencies(),
         "tools": ["get_server_info", "search_filings", "get_filing"],
         "limits": {
             "max_results": MAX_MAX_RESULTS,
