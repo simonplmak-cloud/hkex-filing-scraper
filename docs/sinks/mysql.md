@@ -2,7 +2,7 @@
 
 Persist filings, document payloads, coverage rows, and graph edges to MySQL or MariaDB.
 
-- Licence: **GPLv2** (MySQL Community / MariaDB) — OSI-approved open source.
+- License: **GPLv2** (MySQL Community / MariaDB) — OSI-approved open source.
 - Driver: [`PyMySQL`](https://pypi.org/project/PyMySQL/) (pure Python, no C toolchain).
 - Extra: `mysql`.
 

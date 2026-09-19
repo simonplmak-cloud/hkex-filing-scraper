@@ -2,7 +2,7 @@
 
 Persist filings and graph edges to Neo4j as nodes and relationships.
 
-- Licence: **GPLv3** (Community Edition) — OSI-approved open source. The `neo4j` Python driver
+- License: **GPLv3** (Community Edition) — OSI-approved open source. The `neo4j` Python driver
   is Apache-2.0, so connecting to a server does not affect this project's MIT license.
 - Driver: [`neo4j`](https://pypi.org/project/neo4j/) (Bolt).
 - Extra: `neo4j`.

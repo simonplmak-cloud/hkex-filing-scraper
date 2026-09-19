@@ -2,7 +2,7 @@
 
 Persist filings, document payloads, coverage rows, and graph edges to a local SQLite file.
 
-- Licence: **Public domain** — OSI-approved open source.
+- License: **Public domain** — OSI-approved open source.
 - Driver: the Python standard library (`sqlite3`) — **no extra required**.
 - Extra: none.
 

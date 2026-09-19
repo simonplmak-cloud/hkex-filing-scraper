@@ -11,6 +11,8 @@ ClickHouse, DuckDB, or SurrealDB.
 - [Configuration reference](configuration.md)
 - [CLI reference](cli.md)
 - [MCP server](mcp.md)
+- [Live MCP gateway](live-mcp.md) — the hosted, no-install endpoint
+- [AI agent support](ai-agents.md)
 - [Try it locally (`examples/`)](https://github.com/simonplmak-cloud/hkex-filing-scraper/tree/main/examples)
 
 ## Per-sink guides
@@ -46,6 +48,7 @@ Every sink is a first-class destination. Rows are in the documented popularity o
 - [ADR 0001 — Versioning and release automation](adr/0001-versioning-and-release-automation.md)
 - [ADR 0002 — Multi-sink architecture](adr/0002-multi-sink-architecture.md)
 - [ADR 0003 — Sink support policy](adr/0003-sink-support-policy.md)
+- [ADR 0004 — Publish to PyPI](adr/0004-publish-to-pypi-trusted-publishing.md)
 
 ## Project
 

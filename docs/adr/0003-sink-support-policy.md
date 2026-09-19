@@ -26,7 +26,7 @@ databases are *source-available* rather than OSI-approved open source.
 
 ## Supported set
 
-| Sink | Licence | OSI open source | Extra |
+| Sink | License | OSI open source | Extra |
 | ---- | ------- | --------------- | ----- |
 | `postgres` | PostgreSQL License | Yes | `postgres` |
 | `mysql` | GPLv2 (Community) | Yes | `mysql` |

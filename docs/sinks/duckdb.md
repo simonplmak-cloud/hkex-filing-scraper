@@ -3,7 +3,7 @@
 Persist filings, document payloads, coverage rows, and graph edges to a DuckDB database
 file (or `:memory:`).
 
-- Licence: **MIT** — OSI-approved open source.
+- License: **MIT** — OSI-approved open source.
 - Driver: [`duckdb`](https://pypi.org/project/duckdb/).
 - Extra: `duckdb`.
 
