@@ -11,6 +11,12 @@ Endpoint:
 https://hkex-listco-updates.ascent-partners.com/api/mcp
 ```
 
+The endpoint speaks **Streamable HTTP**: send `POST` requests carrying JSON-RPC 2.0. It is
+not a web page — opening the URL in a browser sends `GET`, which the gateway answers with
+`405 Method Not Allowed` (the MCP specification allows this when no server-sent-events
+stream is offered). Cross-origin clients are supported through an `OPTIONS` CORS preflight
+and an `Origin` allowlist.
+
 ## Tools
 
 | Tool | What it does |
