@@ -43,12 +43,6 @@ def _render(result: "live_mcp.RpcResponse") -> Response:
 app = FastAPI(title=live_mcp.SERVER_NAME, docs_url=None, redoc_url=None, openapi_url=None)
 
 
-@app.get("/healthz")
-async def healthz() -> Response:
-    """Unauthenticated liveness probe (used by uptime checks)."""
-    return Response(content='{"ok":true}', media_type="application/json")
-
-
 @app.post("/{full_path:path}")
 async def mcp_post(full_path: str, request: Request) -> Response:
     origin = request.headers.get("origin")
@@ -62,6 +56,8 @@ async def mcp_post(full_path: str, request: Request) -> Response:
 
 
 @app.api_route("/{full_path:path}", methods=["GET", "DELETE", "PUT", "PATCH", "OPTIONS"])
-async def method_not_allowed(full_path: str) -> Response:
-    """Stateless Streamable HTTP is POST-only: everything else is 405."""
+async def non_post(full_path: str) -> Response:
+    """Liveness at ``/healthz``; every other non-POST method is 405 (Streamable HTTP is POST-only)."""
+    if full_path.rstrip("/").endswith("healthz"):
+        return Response(content='{"ok":true}', media_type="application/json")
     return Response(status_code=405, headers={"Allow": "POST"})

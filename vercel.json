@@ -1,14 +1,19 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "fluid": true,
   "buildCommand": "mkdocs build --strict",
   "outputDirectory": "site",
   "functions": {
     "api/mcp.py": {
-      "maxDuration": 60,
-      "memory": 1024,
+      "maxDuration": 300,
+      "memory": 2048,
       "regions": ["hkg1"],
-      "functionFailoverRegions": ["sin1"]
+      "functionFailoverRegions": ["sin1"],
+      "excludeFiles": "{site/**,docs/**,tests/**,.github/**,**/*.md,uv.lock,mkdocs.yml,scripts/**,overrides/**}"
     }
   },
-  "rewrites": [{ "source": "/mcp", "destination": "/api/mcp" }]
+  "rewrites": [
+    { "source": "/mcp", "destination": "/api/mcp" },
+    { "source": "/healthz", "destination": "/api/mcp/healthz" }
+  ]
 }
