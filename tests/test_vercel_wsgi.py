@@ -97,6 +97,14 @@ def test_options_with_disallowed_origin_is_403():
     assert "access-control-allow-origin" not in captured["header_map"]
 
 
+def test_desktop_origins_are_allowed():
+    # Electron/desktop MCP clients send no Origin, "null", or a file:// origin.
+    body = rpc({"jsonrpc": "2.0", "id": 1, "method": "ping"})
+    for origin in (None, "null", "file://"):
+        captured, _ = call(body=body, origin=origin)
+        assert captured["status"].startswith("200"), origin
+
+
 # --- POST ---------------------------------------------------------------------
 
 

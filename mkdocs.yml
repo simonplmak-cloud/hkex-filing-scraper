@@ -57,6 +57,7 @@ nav:
   - CLI: cli.md
   - MCP server: mcp.md
   - Live MCP gateway: live-mcp.md
+  - AI agent support: ai-agents.md
   - Architecture: architecture.md
   - Troubleshooting: troubleshooting.md
   - Testing: testing.md

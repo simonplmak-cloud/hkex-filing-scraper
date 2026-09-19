@@ -51,7 +51,7 @@ STREAMABLE_HTTP_PATH = "/mcp"
 
 # Legacy MCP protocol versions whose Streamable HTTP semantics this transport implements.
 PROTOCOL_VERSION = "2024-11-05"
-SUPPORTED_PROTOCOL_VERSIONS = ("2024-11-05", "2025-06-18", "2025-11-25")
+SUPPORTED_PROTOCOL_VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25")
 
 # Hard server-side caps. The model can raise none of these.
 DEFAULT_MAX_RESULTS = 50
@@ -457,6 +457,14 @@ def _handle_message(message: Any) -> Optional[Dict[str, Any]]:
         return _jsonrpc_ok(message_id, _tool_result(value))
     if method.startswith("notifications/"):
         return None
+    # The server advertises no resources or prompts, but some clients probe these
+    # unconditionally; answer with empty lists instead of "method not found".
+    if method == "resources/list":
+        return None if is_notification else _jsonrpc_ok(message_id, {"resources": []})
+    if method == "resources/templates/list":
+        return None if is_notification else _jsonrpc_ok(message_id, {"resourceTemplates": []})
+    if method == "prompts/list":
+        return None if is_notification else _jsonrpc_ok(message_id, {"prompts": []})
     return _jsonrpc_error(message_id, METHOD_NOT_FOUND, f"Method not found: {method}")
 
 

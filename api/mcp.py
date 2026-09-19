@@ -50,8 +50,18 @@ def _read_body(environ: dict) -> bytes:
     return stream.read(length)
 
 
-def _origin_allowed(origin: Optional[str], allowed: list) -> bool:
-    return bool(origin) and origin.rstrip("/") in allowed
+def _origin_rejected(origin: Optional[str], allowed: list) -> bool:
+    """Reject only non-allowlisted *web* origins.
+
+    The allowlist is MCP's DNS-rebinding mitigation, which guards against a web page
+    driving the endpoint. Desktop/Electron MCP clients send no ``Origin``, ``null``, or a
+    ``file://`` origin; those are not browser cross-site requests, so they are allowed.
+    """
+    if not origin:
+        return False
+    if origin == "null" or origin.startswith("file:"):
+        return False
+    return origin.rstrip("/") not in allowed
 
 
 def _cors_headers(origin: Optional[str], allowed: list) -> list:
@@ -124,7 +134,7 @@ def app(environ: dict, start_response):
     origin = environ.get("HTTP_ORIGIN")
     allowed = _allowed_origins()
     cors = _cors_headers(origin, allowed)
-    forbidden = bool(origin) and not _origin_allowed(origin, allowed)
+    forbidden = _origin_rejected(origin, allowed)
 
     if method == "OPTIONS":
         if forbidden:

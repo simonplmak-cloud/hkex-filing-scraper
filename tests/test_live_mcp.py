@@ -225,6 +225,27 @@ class TestJsonRpcProtocol:
         )
         assert response.body["result"]["protocolVersion"] == live_mcp.PROTOCOL_VERSION
 
+    def test_initialize_supports_2025_03_26(self):
+        response = live_mcp.handle_jsonrpc(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"protocolVersion": "2025-03-26"},
+            }
+        )
+        assert response.body["result"]["protocolVersion"] == "2025-03-26"
+
+    def test_capability_probes_return_empty_lists(self):
+        for method, key in (
+            ("resources/list", "resources"),
+            ("resources/templates/list", "resourceTemplates"),
+            ("prompts/list", "prompts"),
+        ):
+            response = live_mcp.handle_jsonrpc({"jsonrpc": "2.0", "id": 9, "method": method})
+            assert response.status == 200
+            assert response.body["result"] == {key: []}
+
     def test_initialized_notification_is_202(self):
         response = live_mcp.handle_jsonrpc(
             {"jsonrpc": "2.0", "method": "notifications/initialized"}
