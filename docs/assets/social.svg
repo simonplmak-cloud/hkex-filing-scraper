@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="HKEx Filing Scraper — HKEx filings, live for AI agents, and nine databases to keep them">
+  <defs>
+    <style>
+      .mono { font-family: "DejaVu Sans Mono", "Liberation Mono", ui-monospace, Menlo, Consolas, monospace; }
+      .title { font-size: 60px; font-weight: 700; fill: #e6e6e6; }
+      .tagline { font-size: 24px; fill: #ffd580; }
+      .card-label { font-size: 19px; font-weight: 700; letter-spacing: 2px; }
+      .card-sub { font-size: 16px; fill: #cfcfcf; }
+      .endpoint { font-size: 16px; fill: #ffd580; }
+      .dbline { font-size: 15px; fill: #e6e6e6; }
+      .cmd { font-size: 18px; fill: #e6e6e6; }
+      .cmdc { font-size: 18px; fill: #b0b0b0; }
+      .footer { font-size: 16px; fill: #b0b0b0; }
+      .panel { fill: #111111; stroke: #2a2a2a; stroke-width: 1.5; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="640" fill="#0b0b0b"/>
+  <rect x="0" y="0" width="1280" height="4" fill="#ffb000"/>
+
+  <text class="mono title" x="72" y="112">HKEx Filing Scraper</text>
+  <text class="mono tagline" x="72" y="158">HKEx filings, live for AI agents — and nine databases to keep them</text>
+  <rect x="72" y="188" width="1136" height="1" fill="#2a2a2a"/>
+
+  <!-- Path 1: AI agents via the hosted MCP gateway -->
+  <rect class="panel" x="72" y="222" width="548" height="152" rx="8"/>
+  <text class="mono card-label" x="96" y="262" fill="#ffb000">ASK AN AI AGENT</text>
+  <text class="mono card-sub" x="96" y="292">MCP · Streamable HTTP · no API key</text>
+  <text class="mono endpoint" x="96" y="322">hkex-listco-updates.ascent-partners.com</text>
+  <text class="mono endpoint" x="96" y="346">/api/mcp</text>
+
+  <!-- Path 2: any of nine databases -->
+  <rect class="panel" x="660" y="222" width="548" height="152" rx="8"/>
+  <text class="mono card-label" x="684" y="262" fill="#7ee787">OR KEEP THEM LOCALLY</text>
+  <text class="mono card-sub" x="684" y="292">nine first-class sinks · one scraper</text>
+  <text class="mono dbline" x="684" y="322">postgres · mysql · sqlite · mongodb · mariadb</text>
+  <text class="mono dbline" x="684" y="346">neo4j · clickhouse · duckdb · surrealdb</text>
+
+  <!-- Command -->
+  <rect x="72" y="404" width="1136" height="66" rx="8" fill="#161616"/>
+  <rect x="72" y="404" width="4" height="66" rx="2" fill="#ffb000"/>
+  <text class="mono cmd" x="96" y="445">$ pip install hkex-filing-scraper</text>
+  <text class="mono cmdc" x="470" y="445">then point your agent at the endpoint</text>
+
+  <text class="mono footer" x="72" y="524">github.com/simonplmak-cloud/hkex-filing-scraper</text>
+  <text class="mono footer" x="1208" y="524" text-anchor="end">MIT License</text>
+  <text class="mono footer" x="72" y="556" fill="#7ee787">search_filings · get_filing · get_server_info</text>
+  <text class="mono footer" x="1208" y="556" text-anchor="end">read-only · nothing stored</text>
+</svg>

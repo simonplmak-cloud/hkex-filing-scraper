@@ -33,6 +33,7 @@ extra_javascript:
   - assets/javascripts/a11y.js
 markdown_extensions:
   - meta
+  - attr_list
   - admonition
   - tables
   - toc:

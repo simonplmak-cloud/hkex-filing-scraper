@@ -21,6 +21,24 @@ not a web page — opening the URL in a browser sends `GET`, which the gateway a
 stream is offered). Cross-origin clients are supported through an `OPTIONS` CORS preflight
 and an `Origin` allowlist.
 
+## How it works
+
+The gateway is the hosted, database-free half of the project. The [MCP server](mcp.md) is the
+local half; the same client can use either.
+
+```mermaid
+flowchart LR
+    A["AI agent<br/>Claude · ChatGPT · Cursor · Copilot<br/>Gemini · opencode · Manus · Perplexity"]
+    A -->|"Streamable HTTP · no API key"| G["Live MCP gateway<br/>stateless · no database"]
+    G -->|"search_filings · get_filing"| H["HKEx API + documents"]
+    A -->|"stdio · hkex-scraper-mcp"| S["Read-only MCP server"]
+    S --> D["Your database<br/>postgres · mysql · sqlite · mongodb<br/>mariadb · neo4j · clickhouse · duckdb · surrealdb"]
+    H -.->|"pip install + scrape"| D
+```
+
+If the diagram does not render, it is also available as
+[an image](assets/mcp.png) — the tools and limits below are the full interface.
+
 ## Tools
 
 | Tool | What it does |

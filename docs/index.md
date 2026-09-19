@@ -2,11 +2,19 @@
 description: Documentation for HKEx Filing Scraper — scrape and ingest Hong Kong Stock Exchange regulatory filings into nine databases, with a hosted MCP server for AI agents.
 ---
 
+![HKEx Filing Scraper — HKEx filings, live for AI agents, and nine databases to keep them](assets/banner.svg)
+
 # HKEx Filing Scraper — Docs
 
 An open-source Python tool that scrapes 25+ years of Hong Kong Stock Exchange (HKEx)
-regulatory filings and ingests them into PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Neo4j,
-ClickHouse, DuckDB, or SurrealDB.
+regulatory filings and ingests them into **any of nine databases** — with full-text and table
+extraction, chunk-level coverage, optional graph linking, and a **hosted MCP gateway** so AI
+agents can query HKEx live.
+
+[Try the hosted endpoint](live-mcp.md){ .md-button .md-button--primary }
+[Getting started](getting-started.md){ .md-button }
+[AI agent support](ai-agents.md){ .md-button }
+[GitHub](https://github.com/simonplmak-cloud/hkex-filing-scraper){ .md-button }
 
 ## Start here
 
