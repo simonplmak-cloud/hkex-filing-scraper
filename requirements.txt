@@ -1,0 +1,9 @@
+# Vercel deployment manifest (repo-root project: docs site + live MCP function).
+# The gateway depends on the published package, not the local source tree, so a deploy
+# always runs a released, reproducible artifact.
+hkex-filing-scraper==2.3.0
+fastapi>=0.115
+PyMuPDF>=1.24
+pymupdf4llm>=0.0.17
+openpyxl>=3.1
+mkdocs-material>=9.5

@@ -36,4 +36,4 @@ Allow: /
 User-agent: CCBot
 Allow: /
 
-Sitemap: https://simonplmak-cloud.github.io/hkex-filing-scraper/sitemap.xml
+Sitemap: https://hkex-listco-updates.ascent-partners.com/sitemap.xml

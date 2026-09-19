@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 DOCS_DIR = Path("docs")
-BASE_URL = "https://simonplmak-cloud.github.io/hkex-filing-scraper/"
+BASE_URL = "https://hkex-listco-updates.ascent-partners.com/"
 
 
 def _page_url(path: Path) -> str:

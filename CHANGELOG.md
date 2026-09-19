@@ -31,6 +31,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pg_trgm` GIN indexes over `lower(title)` and `lower(document_text)` so substring search
   can use an index bitmap scan. Best effort: a user without privilege logs a warning and
   search falls back to a scan, and schema init is never blocked.
+- **Live MCP gateway (Streamable HTTP).** `src/hkex_scraper/live_mcp.py` exposes the same
+  reader as a stateless, database-free HTTP transport with three live tools
+  (`get_server_info`, `search_filings`, `get_filing`), fetching fresh data from HKEx on every
+  call. The transport is implemented directly — no SDK, no session state, no ASGI lifespan —
+  and is guarded by an SSRF host allowlist, an Origin allowlist, and response caps. The
+  Vercel entry point is `api/mcp.py`, deployed at `/mcp`. See [docs/live-mcp.md](docs/live-mcp.md).
+
+### Changed
+
+- **Documentation is now served by Vercel** at
+  <https://hkex-listco-updates.ascent-partners.com/> (the docs site and the live MCP gateway
+  share one deployment). GitHub Pages is retired; `mkdocs build --strict` now runs in CI.
 
 ## [2.1.0] - 2026-09-17
 

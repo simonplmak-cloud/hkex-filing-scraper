@@ -11,7 +11,7 @@ Most questions are answered in the docs:
 - [CLI reference](docs/cli.md) — every flag.
 - [Sink guides](docs/sinks/README.md) — per-engine setup, schema, and queries.
 - [Troubleshooting](docs/troubleshooting.md) — common errors and fixes.
-- [Docs site](https://simonplmak-cloud.github.io/hkex-filing-scraper/) — the same docs, searchable.
+- [Docs site](https://hkex-listco-updates.ascent-partners.com/) — the same docs, searchable.
 
 ## Where to ask
 
