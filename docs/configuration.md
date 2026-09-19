@@ -122,7 +122,6 @@ same `DATABASE_TARGET` and sink connection settings and reads them from `Path.cw
 Because the database adapters do not enforce read-only access, point the MCP server at a
 database user that only has `SELECT` (or a read replica). See [MCP server](mcp.md#safety).
 
-
 ## Performance
 
 | Variable | Default | Description |
