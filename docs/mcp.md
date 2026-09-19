@@ -12,6 +12,12 @@ schema DDL.
 
 To query HKEx live without a database, see the [live MCP gateway](live-mcp.md) instead.
 
+```mermaid
+flowchart LR
+    A["AI agent<br/>any MCP host"] -->|stdio| S["hkex-scraper-mcp<br/>read-only · 16 tools"]
+    S -->|"SQL reads"| D["Your database<br/>nine sinks"]
+```
+
 ## Install
 
 ```bash

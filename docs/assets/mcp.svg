@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="420" viewBox="0 0 1120 420" role="img" aria-label="Two ways to reach HKEx filings from an AI agent: a hosted, stateless MCP gateway over Streamable HTTP with no API key, or the local stdio MCP server reading a stored corpus in any of nine databases">
+  <defs>
+    <style>
+      .mono { font-family: "DejaVu Sans Mono", "Liberation Mono", ui-monospace, Menlo, Consolas, monospace; }
+      .h1 { font-size: 21px; font-weight: 700; fill: #e6e6e6; }
+      .sect { font-size: 14px; font-weight: 700; letter-spacing: 2px; }
+      .box { font-size: 16px; font-weight: 700; fill: #e6e6e6; }
+      .sub { font-size: 12.5px; fill: #b0b0b0; }
+      .edge { font-size: 11px; fill: #cfcfcf; }
+      .note { font-size: 13px; fill: #b0b0b0; }
+      .panel { fill: #111111; stroke: #2a2a2a; stroke-width: 1.5; }
+      .amb { stroke: #ffb000; stroke-width: 2; }
+      .grn { stroke: #7ee787; stroke-width: 2; }
+      .arrow { stroke: #3d3d3d; stroke-width: 1.8; fill: none; }
+      .dash { stroke: #3d3d3d; stroke-width: 1.6; fill: none; stroke-dasharray: 5 5; }
+    </style>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#3d3d3d"/>
+    </marker>
+  </defs>
+
+  <rect width="1120" height="420" fill="#0b0b0b"/>
+  <rect x="0" y="0" width="1120" height="4" fill="#ffb000"/>
+
+  <text class="mono h1" x="40" y="54">Two ways to reach HKEx filings from an AI agent</text>
+
+  <!-- Hosted path -->
+  <text class="mono sect" x="40" y="100" fill="#ffb000">HOSTED · NO INSTALL, NO API KEY</text>
+
+  <rect class="panel" x="40" y="118" width="200" height="86" rx="7"/>
+  <text class="mono box" x="56" y="146">AI agent</text>
+  <text class="mono sub" x="56" y="168">Claude · ChatGPT</text>
+  <text class="mono sub" x="56" y="184">Cursor · Copilot</text>
+  <text class="mono sub" x="56" y="200">Gemini · opencode</text>
+
+  <path class="arrow" d="M240 161 H 336" marker-end="url(#ah)"/>
+  <text class="mono edge" x="252" y="150">Streamable</text>
+  <text class="mono edge" x="252" y="178">HTTP · no key</text>
+
+  <rect class="panel amb" x="340" y="118" width="280" height="86" rx="7"/>
+  <text class="mono box" x="358" y="146">Live MCP gateway</text>
+  <text class="mono sub" x="358" y="168">stateless · no database</text>
+  <text class="mono sub" x="358" y="184">/api/mcp</text>
+
+  <path class="arrow" d="M620 161 H 726" marker-end="url(#ah)"/>
+  <text class="mono edge" x="634" y="150">search_filings</text>
+  <text class="mono edge" x="634" y="178">get_filing</text>
+
+  <rect class="panel" x="730" y="118" width="350" height="86" rx="7"/>
+  <text class="mono box" x="748" y="146">HKEx API + documents</text>
+  <text class="mono sub" x="748" y="168">fetched live on every call</text>
+  <text class="mono sub" x="748" y="184">www1.hkexnews.hk</text>
+
+  <!-- Local path -->
+  <text class="mono sect" x="40" y="262" fill="#7ee787">LOCAL · STDIO OVER A STORED CORPUS</text>
+
+  <rect class="panel" x="40" y="280" width="200" height="86" rx="7"/>
+  <text class="mono box" x="56" y="308">AI agent</text>
+  <text class="mono sub" x="56" y="330">any MCP host</text>
+
+  <path class="arrow" d="M240 323 H 336" marker-end="url(#ah)"/>
+  <text class="mono edge" x="278" y="312">stdio</text>
+
+  <rect class="panel grn" x="340" y="280" width="280" height="86" rx="7"/>
+  <text class="mono box" x="358" y="308">hkex-scraper-mcp</text>
+  <text class="mono sub" x="358" y="330">read-only · 16 tools</text>
+
+  <path class="arrow" d="M620 323 H 726" marker-end="url(#ah)"/>
+  <text class="mono edge" x="652" y="312">SQL reads</text>
+
+  <rect class="panel grn" x="730" y="280" width="350" height="86" rx="7"/>
+  <text class="mono box" x="748" y="308">Your database</text>
+  <text class="mono sub" x="748" y="330">postgres · mysql · sqlite · mongodb</text>
+  <text class="mono sub" x="748" y="346">mariadb · neo4j · clickhouse · duckdb</text>
+  <text class="mono sub" x="748" y="362">surrealdb</text>
+
+  <path class="dash" d="M905 204 V 278" marker-end="url(#ah)"/>
+  <text class="mono edge" x="914" y="246">pip install + scrape</text>
+
+  <text class="mono note" x="40" y="400">Both surfaces are read-only: nothing is written and no arbitrary URL is fetched.</text>
+</svg>

@@ -76,6 +76,35 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 Write the subject in the imperative mood (`add ClickHouse sink`, not `added`). Keep it under
 72 characters; put the why in the body.
 
+## Brand assets
+
+The visual identity is the docs theme: amber on near-black, monospace. The palette lives in
+[docs/assets/stylesheets/terminal.css](docs/assets/stylesheets/terminal.css); keep new artwork
+on it.
+
+| Asset | Role |
+| ----- | ---- |
+| `docs/assets/social.svg` → `docs/social_preview.png` | README hero, `og:image`, GitHub social preview (1280×640) |
+| `docs/assets/mcp.svg` → `docs/assets/mcp.png` | MCP architecture diagram (README + PyPI) |
+| `docs/assets/banner.svg` | Docs home hero |
+| `docs/assets/favicon.svg` | Site logo and favicon |
+| `docs/assets/demo.svg` | Terminal demo in the README |
+
+The PNGs are generated from the SVGs with headless Chromium, because it resolves the embedded
+CSS and system fonts exactly as a browser does:
+
+```bash
+python scripts/render_brand_assets.py           # re-render the PNGs
+python scripts/render_brand_assets.py --check   # verify committed sizes (used by tests)
+```
+
+Chromium is found automatically (Playwright's bundled copy, `/usr/bin/chromium`, or
+`google-chrome`); set `CHROME_BIN` to override.
+
+**When `docs/social_preview.png` changes, refresh the repository social preview** — GitHub has
+no API for it. Open **Settings → General → Social preview → Edit → Upload an image** and
+upload the 1280×640 PNG. Otherwise shared repository links keep the old card.
+
 ## Releasing
 
 A release is created by pushing an annotated tag. The **Release** workflow builds the

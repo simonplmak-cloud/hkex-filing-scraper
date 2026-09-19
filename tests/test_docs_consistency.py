@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+import struct
 
 import pytest
 
@@ -294,3 +295,36 @@ class TestLlmsIndex:
             assert any(candidate.exists() for candidate in candidates), (
                 f"docs/llms.txt links to a page that does not exist: {url}"
             )
+
+
+# --- Brand assets --------------------------------------------------------------
+def _png_size(rel: str) -> tuple[int, int]:
+    data = (ROOT / rel).read_bytes()[:24]
+    assert data[:8] == b"\x89PNG\r\n\x1a\n", f"{rel} is not a PNG"
+    return struct.unpack(">II", data[16:24])
+
+
+class TestBrandAssets:
+    """The committed artwork must match the sizes the site and GitHub advertise."""
+
+    def test_social_preview_size_matches_the_og_meta(self):
+        assert _png_size("docs/social_preview.png") == (1280, 640)
+        head = _read("overrides/main.html")
+        assert 'content="1280"' in head and 'content="640"' in head
+
+    def test_mcp_diagram_png_size(self):
+        assert _png_size("docs/assets/mcp.png") == (1120, 420)
+
+    def test_brand_sources_exist(self):
+        for name in ("social.svg", "mcp.svg", "banner.svg", "favicon.svg", "demo.svg"):
+            assert (ROOT / "docs" / "assets" / name).exists(), f"docs/assets/{name} is missing"
+
+    def test_readme_images_use_absolute_urls(self):
+        readme = _read("README.md")
+        sources = re.findall(r"!\[[^\]]*\]\(([^)\s]+)", readme)
+        assert sources, "README has no images"
+        relative = [src for src in sources if not src.startswith("https://")]
+        assert not relative, f"README images must be absolute URLs: {relative}"
+
+    def test_readme_shows_the_mcp_diagram(self):
+        assert "docs/assets/mcp.png" in _read("README.md")
