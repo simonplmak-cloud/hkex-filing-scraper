@@ -86,6 +86,16 @@ dev = [
     "ruff>=0.16,<0.17",
 ]
 
+# Deploy/runtime dependency group (NOT a published optional-dependency, so the PyPI
+# metadata's required dependencies are unchanged). The live gateway and local runs need
+# document extraction; Vercel installs this group by default via `uv sync`. These are
+# AGPL-3.0, which is why they stay out of `[project]` and `[all]`. See docs/legal.md.
+[dependency-groups]
+deploy = ["PyMuPDF>=1.23", "pymupdf4llm>=0.0.17", "openpyxl>=3.1"]
+
+[tool.uv]
+default-groups = ["deploy"]
+
 [project.scripts]
 hkex-scraper = "hkex_scraper.main:main"
 hkex-scraper-mcp = "hkex_scraper.mcp_server:main"

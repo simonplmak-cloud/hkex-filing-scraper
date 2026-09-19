@@ -1,10 +1,5 @@
-# Vercel dependencies (installCommand runs `pip install -r requirements.txt`).
-# Vercel's uv-based function install only covers pyproject base dependencies, so the
-# optional document-extraction libraries (and the docs toolchain) are installed here.
-requests>=2.28
-beautifulsoup4>=4.11
-PyMuPDF==1.28.2
-pymupdf4llm==1.28.2
-openpyxl==3.1.5
-# Build-only (the docs site).
+# Vercel build dependencies (used by `buildCommand`: `mkdocs build --strict`).
+# The Python *functions* are bundled from the project's dependency graph
+# (pyproject.toml + uv.lock, including the default `deploy` dependency-group), not from
+# this file.
 mkdocs-material==9.7.7

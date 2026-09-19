@@ -914,6 +914,13 @@ postgres = [
     { name = "psycopg", extra = ["binary", "pool"] },
 ]
 
+[package.dev-dependencies]
+deploy = [
+    { name = "openpyxl" },
+    { name = "pymupdf" },
+    { name = "pymupdf4llm" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.11" },
@@ -946,6 +953,13 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16,<0.17" },
 ]
 provides-extras = ["all", "clickhouse", "dev", "duckdb", "excel", "mcp", "mongodb", "mysql", "neo4j", "pdf", "postgres"]
+
+[package.metadata.requires-dev]
+deploy = [
+    { name = "openpyxl", specifier = ">=3.1" },
+    { name = "pymupdf", specifier = ">=1.23" },
+    { name = "pymupdf4llm", specifier = ">=0.0.17" },
+]
 
 [[package]]
 name = "httpcore"
