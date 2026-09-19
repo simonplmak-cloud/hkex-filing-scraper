@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
-[![Docs](https://img.shields.io/badge/docs-simonplmak--cloud.github.io-blue)](https://simonplmak-cloud.github.io/hkex-filing-scraper/)
+[![Docs](https://img.shields.io/badge/docs-hkex--listco--updates.ascent--partners.com-blue)](https://hkex-listco-updates.ascent-partners.com/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com)
@@ -342,7 +342,7 @@ WHERE filing_type = 'Annual Report';
 ## Documentation
 
 - [Getting started](docs/getting-started.md)
-- **Docs site:** <https://simonplmak-cloud.github.io/hkex-filing-scraper/>
+- **Docs site:** <https://hkex-listco-updates.ascent-partners.com/>
 - [Database sinks (support matrix)](docs/sinks/README.md)
 - [PostgreSQL sink guide](docs/sinks/postgresql.md)
 - [MySQL/MariaDB sink guide](docs/sinks/mysql.md)

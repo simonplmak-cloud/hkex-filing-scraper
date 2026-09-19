@@ -4,7 +4,7 @@ contact_links:
     url: https://github.com/simonplmak-cloud/hkex-filing-scraper/discussions
     about: Ask a question, share a setup, or discuss an idea in Discussions. Please do not open an issue for usage questions.
   - name: Documentation
-    url: https://simonplmak-cloud.github.io/hkex-filing-scraper/
+    url: https://hkex-listco-updates.ascent-partners.com/
     about: Getting started, configuration, CLI, sink guides, and troubleshooting.
   - name: Security vulnerability
     url: https://github.com/simonplmak-cloud/hkex-filing-scraper/security/policy

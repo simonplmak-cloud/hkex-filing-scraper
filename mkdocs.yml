@@ -1,6 +1,6 @@
 site_name: HKEx Filing Scraper
 site_description: Scrape and ingest HKEx (Hong Kong Stock Exchange) regulatory filings — 25+ years of announcements and disclosures — into PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Neo4j, ClickHouse, DuckDB, or SurrealDB.
-site_url: https://simonplmak-cloud.github.io/hkex-filing-scraper/
+site_url: https://hkex-listco-updates.ascent-partners.com/
 site_author: Simon Mak
 repo_url: https://github.com/simonplmak-cloud/hkex-filing-scraper
 repo_name: simonplmak-cloud/hkex-filing-scraper
@@ -56,6 +56,7 @@ nav:
   - Configuration: configuration.md
   - CLI: cli.md
   - MCP server: mcp.md
+  - Live MCP gateway: live-mcp.md
   - Architecture: architecture.md
   - Troubleshooting: troubleshooting.md
   - Testing: testing.md

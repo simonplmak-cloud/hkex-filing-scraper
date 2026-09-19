@@ -32,6 +32,19 @@ jobs:
       - name: markdownlint-cli2
         uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24
 
+  docs:
+    name: Docs build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install MkDocs Material
+        run: pip install "mkdocs-material>=9.5"
+      - name: Build
+        run: mkdocs build --strict
+
   supply-chain:
     name: Supply chain
     runs-on: ubuntu-latest

@@ -55,6 +55,7 @@ SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
             ("configuration.md", "Configuration"),
             ("cli.md", "CLI"),
             ("mcp.md", "MCP"),
+            ("live-mcp.md", "Live-MCP-Gateway"),
             ("architecture.md", "Architecture"),
             ("troubleshooting.md", "Troubleshooting"),
             ("testing.md", "Testing"),

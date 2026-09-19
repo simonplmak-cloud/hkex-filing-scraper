@@ -8,38 +8,38 @@
 
 ## Getting started
 
-- [Home](https://simonplmak-cloud.github.io/hkex-filing-scraper/): what the project is and where to start.
-- [Getting started](https://simonplmak-cloud.github.io/hkex-filing-scraper/getting-started/): install, quick start, and first run.
-- [Configuration](https://simonplmak-cloud.github.io/hkex-filing-scraper/configuration/): every environment variable and the `DATABASE_TARGET` sink selector.
-- [CLI](https://simonplmak-cloud.github.io/hkex-filing-scraper/cli/): command-line reference and flags.
-- [MCP server](https://simonplmak-cloud.github.io/hkex-filing-scraper/mcp/): a read-only Model Context Protocol server over stdio for LLM clients.
+- [Home](https://hkex-listco-updates.ascent-partners.com/): what the project is and where to start.
+- [Getting started](https://hkex-listco-updates.ascent-partners.com/getting-started/): install, quick start, and first run.
+- [Configuration](https://hkex-listco-updates.ascent-partners.com/configuration/): every environment variable and the `DATABASE_TARGET` sink selector.
+- [CLI](https://hkex-listco-updates.ascent-partners.com/cli/): command-line reference and flags.
+- [MCP server](https://hkex-listco-updates.ascent-partners.com/mcp/): a read-only Model Context Protocol server over stdio for LLM clients.
 
 ## Database sinks
 
-- [Overview](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/): support matrix, capabilities, and popularity order.
-- [PostgreSQL](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/postgresql/), [MySQL / MariaDB](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/mysql/), [SQLite](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/sqlite/), [MongoDB](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/mongodb/), [Neo4j](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/neo4j/), [ClickHouse](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/clickhouse/), [DuckDB](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/duckdb/), [SurrealDB](https://simonplmak-cloud.github.io/hkex-filing-scraper/sinks/surrealdb/): per-engine setup, upserts, and notes.
+- [Overview](https://hkex-listco-updates.ascent-partners.com/sinks/): support matrix, capabilities, and popularity order.
+- [PostgreSQL](https://hkex-listco-updates.ascent-partners.com/sinks/postgresql/), [MySQL / MariaDB](https://hkex-listco-updates.ascent-partners.com/sinks/mysql/), [SQLite](https://hkex-listco-updates.ascent-partners.com/sinks/sqlite/), [MongoDB](https://hkex-listco-updates.ascent-partners.com/sinks/mongodb/), [Neo4j](https://hkex-listco-updates.ascent-partners.com/sinks/neo4j/), [ClickHouse](https://hkex-listco-updates.ascent-partners.com/sinks/clickhouse/), [DuckDB](https://hkex-listco-updates.ascent-partners.com/sinks/duckdb/), [SurrealDB](https://hkex-listco-updates.ascent-partners.com/sinks/surrealdb/): per-engine setup, upserts, and notes.
 
 ## Architecture and operations
 
-- [Architecture](https://simonplmak-cloud.github.io/hkex-filing-scraper/architecture/): the two-phase pipeline and module map.
-- [Troubleshooting](https://simonplmak-cloud.github.io/hkex-filing-scraper/troubleshooting/): common failures and fixes.
-- [Testing](https://simonplmak-cloud.github.io/hkex-filing-scraper/testing/): how tests run and how to add them.
+- [Architecture](https://hkex-listco-updates.ascent-partners.com/architecture/): the two-phase pipeline and module map.
+- [Troubleshooting](https://hkex-listco-updates.ascent-partners.com/troubleshooting/): common failures and fixes.
+- [Testing](https://hkex-listco-updates.ascent-partners.com/testing/): how tests run and how to add them.
 
 ## Project and governance
 
-- [Style guide](https://simonplmak-cloud.github.io/hkex-filing-scraper/STYLE/): docs style rules.
-- [De-risking register](https://simonplmak-cloud.github.io/hkex-filing-scraper/de-risking/): tracked risks and mitigations.
-- [Legal](https://simonplmak-cloud.github.io/hkex-filing-scraper/legal/): licensing and terms of use.
-- [Upgrading](https://simonplmak-cloud.github.io/hkex-filing-scraper/upgrading/): version-to-version migration notes.
+- [Style guide](https://hkex-listco-updates.ascent-partners.com/STYLE/): docs style rules.
+- [De-risking register](https://hkex-listco-updates.ascent-partners.com/de-risking/): tracked risks and mitigations.
+- [Legal](https://hkex-listco-updates.ascent-partners.com/legal/): licensing and terms of use.
+- [Upgrading](https://hkex-listco-updates.ascent-partners.com/upgrading/): version-to-version migration notes.
 
 ## Releasing
 
-- [How to release](https://simonplmak-cloud.github.io/hkex-filing-scraper/releasing/): the tag → CI → PyPI + GitHub Release flow.
-- [Release automation reference](https://simonplmak-cloud.github.io/hkex-filing-scraper/release-automation/): how and why the release pipeline works.
+- [How to release](https://hkex-listco-updates.ascent-partners.com/releasing/): the tag → CI → PyPI + GitHub Release flow.
+- [Release automation reference](https://hkex-listco-updates.ascent-partners.com/release-automation/): how and why the release pipeline works.
 
 ## Decisions (ADRs)
 
-- [ADR 0001 — Versioning](https://simonplmak-cloud.github.io/hkex-filing-scraper/adr/0001-versioning-and-release-automation/): git-tag-as-version via hatch-vcs.
-- [ADR 0002 — Multi-sink](https://simonplmak-cloud.github.io/hkex-filing-scraper/adr/0002-multi-sink-architecture/): one scraper, many databases.
-- [ADR 0003 — Support policy](https://simonplmak-cloud.github.io/hkex-filing-scraper/adr/0003-sink-support-policy/): open source first.
-- [ADR 0004 — Publish to PyPI](https://simonplmak-cloud.github.io/hkex-filing-scraper/adr/0004-publish-to-pypi-trusted-publishing/): Trusted Publishing; GitHub Packages rejected.
+- [ADR 0001 — Versioning](https://hkex-listco-updates.ascent-partners.com/adr/0001-versioning-and-release-automation/): git-tag-as-version via hatch-vcs.
+- [ADR 0002 — Multi-sink](https://hkex-listco-updates.ascent-partners.com/adr/0002-multi-sink-architecture/): one scraper, many databases.
+- [ADR 0003 — Support policy](https://hkex-listco-updates.ascent-partners.com/adr/0003-sink-support-policy/): open source first.
+- [ADR 0004 — Publish to PyPI](https://hkex-listco-updates.ascent-partners.com/adr/0004-publish-to-pypi-trusted-publishing/): Trusted Publishing; GitHub Packages rejected.

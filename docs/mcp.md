@@ -6,6 +6,8 @@ fixed catalog of **read-only** tools over **stdio** and speaks only to the confi
 database sinks — it never scrapes the network, never writes a record, and never runs
 schema DDL.
 
+To query HKEx live without a database, see the [live MCP gateway](live-mcp.md) instead.
+
 ## Install
 
 ```bash
