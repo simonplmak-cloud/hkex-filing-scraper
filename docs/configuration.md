@@ -1,3 +1,7 @@
+---
+description: Every environment variable for HKEx Filing Scraper, including the DATABASE_TARGET sink selector and per-sink connection settings.
+---
+
 # Configuration Reference
 
 Configuration is read from environment variables. A `.env` file in the **current working directory** is loaded automatically (requires `python-dotenv`; if it is missing, environment variables still work). `.env` is never committed.

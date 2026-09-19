@@ -1,3 +1,7 @@
+---
+description: Documentation for HKEx Filing Scraper — scrape and ingest Hong Kong Stock Exchange regulatory filings into nine databases, with a hosted MCP server for AI agents.
+---
+
 # HKEx Filing Scraper — Docs
 
 An open-source Python tool that scrapes 25+ years of Hong Kong Stock Exchange (HKEx)

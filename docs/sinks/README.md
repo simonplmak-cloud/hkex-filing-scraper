@@ -1,3 +1,7 @@
+---
+description: Support matrix for every HKEx Filing Scraper sink — licenses, capability differences, and per-engine notes.
+---
+
 # Database sinks
 
 The scraper writes each record to **every** sink listed in `DATABASE_TARGET` (a

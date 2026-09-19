@@ -1,3 +1,7 @@
+---
+description: The two-phase pipeline, the sink seam, failure isolation, and the module map for HKEx Filing Scraper.
+---
+
 # Architecture
 
 ## Two-phase pipeline

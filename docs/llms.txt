@@ -13,6 +13,8 @@
 - [Configuration](https://hkex-listco-updates.ascent-partners.com/configuration/): every environment variable and the `DATABASE_TARGET` sink selector.
 - [CLI](https://hkex-listco-updates.ascent-partners.com/cli/): command-line reference and flags.
 - [MCP server](https://hkex-listco-updates.ascent-partners.com/mcp/): a read-only Model Context Protocol server over stdio for LLM clients.
+- [Live MCP gateway](https://hkex-listco-updates.ascent-partners.com/live-mcp/): a hosted, database-free Streamable HTTP MCP endpoint that fetches live HKEx data; no API key.
+- [AI agent support](https://hkex-listco-updates.ascent-partners.com/ai-agents/): connect the gateway from Claude, ChatGPT, Cursor, Copilot, Gemini, opencode, Manus, and Perplexity.
 
 ## Database sinks
 
@@ -28,6 +30,7 @@
 ## Project and governance
 
 - [Style guide](https://hkex-listco-updates.ascent-partners.com/STYLE/): docs style rules.
+- [Roadmap](https://hkex-listco-updates.ascent-partners.com/roadmap/): shipped, next, and considered work.
 - [De-risking register](https://hkex-listco-updates.ascent-partners.com/de-risking/): tracked risks and mitigations.
 - [Legal](https://hkex-listco-updates.ascent-partners.com/legal/): licensing and terms of use.
 - [Upgrading](https://hkex-listco-updates.ascent-partners.com/upgrading/): version-to-version migration notes.
@@ -43,3 +46,7 @@
 - [ADR 0002 — Multi-sink](https://hkex-listco-updates.ascent-partners.com/adr/0002-multi-sink-architecture/): one scraper, many databases.
 - [ADR 0003 — Support policy](https://hkex-listco-updates.ascent-partners.com/adr/0003-sink-support-policy/): open source first.
 - [ADR 0004 — Publish to PyPI](https://hkex-listco-updates.ascent-partners.com/adr/0004-publish-to-pypi-trusted-publishing/): Trusted Publishing; GitHub Packages rejected.
+
+## Full text
+
+- [Complete documentation in one file](https://hkex-listco-updates.ascent-partners.com/llms-full.txt): every page concatenated for a single-pass read.

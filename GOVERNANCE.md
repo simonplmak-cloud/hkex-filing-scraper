@@ -24,7 +24,7 @@ record of high-quality contributions and demonstrated judgment.
 - **Significant changes** (architecture, public interfaces, a new dependency category, a
   breaking change) are recorded as an [Architecture Decision Record](docs/adr/) under `docs/adr/`
   before or alongside implementation. The ADR is the durable record of *why*.
-- **Roadmap items** are tracked in the [README](README.md#roadmap) and [docs/de-risking.md](docs/de-risking.md).
+- **Roadmap items** are tracked in [docs/roadmap.md](docs/roadmap.md) and [docs/de-risking.md](docs/de-risking.md).
 
 Consensus is preferred; when consensus is not reached, the maintainer decides and documents
 the reasoning in the relevant issue, PR, or ADR.

@@ -66,6 +66,7 @@ SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         "Project",
         [
             ("de-risking.md", "De-risking"),
+            ("roadmap.md", "Roadmap"),
             ("legal.md", "Legal"),
             ("upgrading.md", "Upgrading"),
             ("releasing.md", "Releasing"),
@@ -198,6 +199,21 @@ def render_footer(repo: str) -> str:
     )
 
 
+def strip_front_matter(text: str) -> str:
+    """Remove a leading YAML front-matter block (``---`` … ``---``).
+
+    The docs site reads the block for per-page meta descriptions; the GitHub wiki has no
+    use for it and would render it as visible text.
+    """
+    if not text.startswith("---"):
+        return text
+    lines = text.splitlines(keepends=True)
+    for index in range(1, len(lines)):
+        if lines[index].strip() in {"---", "..."}:
+            return "".join(lines[index + 1 :]).lstrip("\n")
+    return text
+
+
 def build(
     docs_dir: pathlib.Path,
     root: pathlib.Path,
@@ -213,7 +229,7 @@ def build(
     (out_dir / "_Footer.md").write_text(render_footer(repo), encoding="utf-8")
 
     for source, page in [(HOME, HOME_PAGE)] + [pair for _, pages in SECTIONS for pair in pages]:
-        body = (docs_dir / source).read_text(encoding="utf-8")
+        body = strip_front_matter((docs_dir / source).read_text(encoding="utf-8"))
         body = rewrite_links(body, source, docs_dir, root, repo, branch)
         if source != HOME:
             body = f"{body.rstrip()}\n\n---\n\n[[{HOME_PAGE}|Home]]\n"
