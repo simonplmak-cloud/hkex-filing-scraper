@@ -15,10 +15,32 @@ Internal marketing notes. Not part of the docs site (kept out of `docs/` on purp
 
 ## Posting order
 
-1. GitHub Release (done — v2.4.0) + Discussion announcement (canonical target).
-2. Registry publish + `awesome-mcp-servers` PR (directories mirror the registry).
-3. Hacker News → X → Reddit within ~24h, once the listing is live.
-4. LinkedIn later in the week (finance/compliance audience).
+1. GitHub Release (done — v2.4.0) + Discussion announcement (canonical target). ✅
+2. Registry publish + `awesome-mcp-servers` PR (directories mirror the registry). ✅
+3. Hacker News → X → Reddit within ~24h, once the listing is live. HN skipped; X done; Reddit pending login.
+4. LinkedIn later in the week (finance/compliance audience). ⏳
+
+## Status (2026-09-20)
+
+| Target | Status | Detail |
+| ------ | ------ | ------ |
+| Official MCP Registry | ✅ published | `io.github.simonplmak-cloud/hkex-filings` 2.4.0 — `streamable-http` remote + PyPI package; verified via the registry API |
+| Smithery | ✅ live | `simon-pl-mak/hkex-filings` — deployed in 9s, 3 tools discovered (`get_server_info`, `search_filings`, `get_filing`), metadata filled, quality 73/100; <https://smithery.ai/servers/simon-pl-mak/hkex-filings> |
+| GitHub Discussion | ✅ posted | Announcements #44 |
+| `awesome-mcp-servers` | ✅ PR opened | #14715 (Finance & Fintech) |
+| X / Twitter | ✅ posted | <https://x.com/SimonMak51642/status/2101483998161825960> — `social_preview.png` attached |
+| Reddit r/mcp | ⏳ pending login | copy below approved; browser parked on `/r/mcp/submit` |
+| Hacker News | ❌ skipped | no HN account; account creation declined |
+| PulseMCP | ⏸ blocked upstream | submissions "temporarily paused" since 2026-09-03; they auto-ingest the official registry |
+| Glama | ⏳ auto-index | not listed yet; adding requires an account, so relying on GitHub auto-index (`mcp-server` topic) |
+| mcp.so | ❌ skipped | sole submission path is a $39 one-time fee |
+| LinkedIn | ⏳ planned | later in the week |
+
+Notes from the submissions:
+
+- Smithery's public API lags the dashboard: `registry.smithery.ai/servers/simon-pl-mak/hkex-filings` still showed an empty description after the settings save persisted (score 49 → 73/100). Re-check in a few hours.
+- Smithery's GitHub App requests write scopes (gists, starring, watching) — granted manually, not automated.
+- Registry publish needed the GitHub device flow (code entered at <https://github.com/login/device>).
 
 ## Hacker News — Show HN
 
@@ -118,11 +140,11 @@ curl -s "https://registry.modelcontextprotocol.io/v0/servers?search=hkex-filings
 The PyPI ownership check reads `mcp-name: io.github.simonplmak-cloud/hkex-filings` from the
 2.4.0 README (confirmed present in the PyPI JSON).
 
-## Metrics baseline (before launch)
+## Metrics (baseline → launch)
 
-| Metric | Value |
-| ------ | ----- |
-| PyPI downloads / month | 110 |
-| GitHub stars | 15 |
-| Forks | 5 |
-| Registry listing | pending |
+| Metric | Before launch | After |
+| ------ | ------------- | ----- |
+| PyPI downloads / month | 110 | re-measure 7 days after launch |
+| GitHub stars | 15 | re-measure 7 days after launch |
+| Forks | 5 | re-measure 7 days after launch |
+| Registry listing | pending | ✅ published 2026-09-20 (official registry + Smithery) |
