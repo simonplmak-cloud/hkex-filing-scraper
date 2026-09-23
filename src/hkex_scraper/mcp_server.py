@@ -20,7 +20,7 @@ import functools
 import json
 import sys
 from datetime import date, datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Annotated, Any, Callable, Dict, List, Literal, Optional, Tuple
 
 from . import __version__, config, sinks
 from .sinks.base import (
@@ -34,6 +34,7 @@ try:  # pragma: no cover - exercised via the mcp extra
     from mcp.server.fastmcp import FastMCP
     from mcp.server.fastmcp.exceptions import ToolError
     from mcp.types import ToolAnnotations
+    from pydantic import Field
 
     _MCP_AVAILABLE = True
 except Exception:  # pragma: no cover - depends on the environment
@@ -41,6 +42,10 @@ except Exception:  # pragma: no cover - depends on the environment
     ToolError = None  # type: ignore[assignment]
     ToolAnnotations = None  # type: ignore[assignment]
     _MCP_AVAILABLE = False
+
+    def Field(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef]  # pragma: no cover
+        """No-op fallback so parameter annotations import without the SDK."""
+        return None
 
 
 SERVER_NAME = "hkex-filing-scraper"
@@ -64,6 +69,12 @@ INSTRUCTIONS = (
     "by ticker/type; get_filing to read one filing (text is paged via "
     "text_offset/max_text_chars). This server never writes and never scrapes the network."
 )
+
+
+# Single-value parameters surfaced as JSON-schema enums. Keep these in sync with
+# ``sinks.base.SEARCH_ORDER_BY`` / ``sinks.base.AGGREGATE_GROUPS`` (asserted in tests).
+OrderBy = Literal["filing_date_desc", "filing_date_asc", "title_asc", "filing_id_asc"]
+GroupBy = Literal["company_ticker", "filing_type", "filing_category", "document_status", "exchange"]
 
 
 class McpError(Exception):
@@ -761,7 +772,12 @@ def count_filings() -> Dict[str, Any]:
 
 
 @_as_tool
-def list_tickers(limit: int = DEFAULT_PAGE_SIZE, offset: int = 0) -> Dict[str, Any]:
+def list_tickers(
+    limit: Annotated[
+        int, Field(description="Maximum tickers to return (1..1000).")
+    ] = DEFAULT_PAGE_SIZE,
+    offset: Annotated[int, Field(description="Zero-based offset for paging.")] = 0,
+) -> Dict[str, Any]:
     """Use this to list the distinct company tickers that have filings.
 
     Returns a sorted, paged list. Use search_filings to fetch filings for a ticker.
@@ -770,7 +786,12 @@ def list_tickers(limit: int = DEFAULT_PAGE_SIZE, offset: int = 0) -> Dict[str, A
 
 
 @_as_tool
-def list_companies(limit: int = DEFAULT_PAGE_SIZE, offset: int = 0) -> Dict[str, Any]:
+def list_companies(
+    limit: Annotated[
+        int, Field(description="Maximum companies to return (1..100).")
+    ] = DEFAULT_PAGE_SIZE,
+    offset: Annotated[int, Field(description="Zero-based offset for paging.")] = 0,
+) -> Dict[str, Any]:
     """Use this to list companies (ticker and name) with their filing counts.
 
     Returns a paged list ordered by filing count. Use search_filings for a company's
@@ -781,19 +802,50 @@ def list_companies(limit: int = DEFAULT_PAGE_SIZE, offset: int = 0) -> Dict[str,
 
 @_as_tool
 def search_filings(
-    ticker: str = "",
-    stock_code: str = "",
-    title_query: str = "",
-    filing_type: str = "",
-    filing_category: str = "",
-    document_status: str = "",
-    exchange: str = "",
-    referenced_ticker: str = "",
-    date_from: str = "",
-    date_to: str = "",
-    order_by: str = "filing_date_desc",
-    offset: int = 0,
-    page_size: int = DEFAULT_PAGE_SIZE,
+    ticker: Annotated[
+        str,
+        Field(description="Company ticker filter, e.g. 0700.HK; comma-separate to match several."),
+    ] = "",
+    stock_code: Annotated[
+        str,
+        Field(
+            description="Numeric stock code filter, e.g. 00700; comma-separate to match several."
+        ),
+    ] = "",
+    title_query: Annotated[
+        str, Field(description="Case-insensitive substring matched against the filing title.")
+    ] = "",
+    filing_type: Annotated[
+        str,
+        Field(description="Filing type(s), e.g. 'Annual Report'; comma-separate to match several."),
+    ] = "",
+    filing_category: Annotated[
+        str,
+        Field(
+            description="Filing category(ies), e.g. LISTED_COMPANY; comma-separate to match several."
+        ),
+    ] = "",
+    document_status: Annotated[
+        str,
+        Field(
+            description="Document status(es): processed, skipped, failed, or unprocessed; comma-separate to match several."
+        ),
+    ] = "",
+    exchange: Annotated[str, Field(description="Exchange code, e.g. HK.")] = "",
+    referenced_ticker: Annotated[
+        str, Field(description="Ticker referenced by the filing (graph edge).")
+    ] = "",
+    date_from: Annotated[
+        str, Field(description="Earliest filing date, YYYY-MM-DD inclusive.")
+    ] = "",
+    date_to: Annotated[str, Field(description="Latest filing date, YYYY-MM-DD inclusive.")] = "",
+    order_by: Annotated[
+        OrderBy, Field(description="Sort order of the result.")
+    ] = "filing_date_desc",
+    offset: Annotated[int, Field(description="Zero-based offset for paging.")] = 0,
+    page_size: Annotated[
+        int, Field(description="Maximum filings to return (1..100).")
+    ] = DEFAULT_PAGE_SIZE,
 ) -> Dict[str, Any]:
     """Use this to find filings by ticker, type, status, date range, or title text.
 
@@ -823,15 +875,34 @@ def search_filings(
 
 @_as_tool
 def search_documents(
-    text_query: str,
-    ticker: str = "",
-    filing_type: str = "",
-    document_status: str = "",
-    date_from: str = "",
-    date_to: str = "",
-    order_by: str = "filing_date_desc",
-    offset: int = 0,
-    page_size: int = DEFAULT_PAGE_SIZE,
+    text_query: Annotated[
+        str, Field(description="Case-insensitive term matched against extracted document text.")
+    ],
+    ticker: Annotated[
+        str,
+        Field(description="Company ticker filter, e.g. 0700.HK; comma-separate to match several."),
+    ] = "",
+    filing_type: Annotated[
+        str,
+        Field(description="Filing type(s), e.g. 'Annual Report'; comma-separate to match several."),
+    ] = "",
+    document_status: Annotated[
+        str,
+        Field(
+            description="Document status(es): processed, skipped, failed, or unprocessed; comma-separate to match several."
+        ),
+    ] = "",
+    date_from: Annotated[
+        str, Field(description="Earliest filing date, YYYY-MM-DD inclusive.")
+    ] = "",
+    date_to: Annotated[str, Field(description="Latest filing date, YYYY-MM-DD inclusive.")] = "",
+    order_by: Annotated[
+        OrderBy, Field(description="Sort order of the result.")
+    ] = "filing_date_desc",
+    offset: Annotated[int, Field(description="Zero-based offset for paging.")] = 0,
+    page_size: Annotated[
+        int, Field(description="Maximum filings to return (1..100).")
+    ] = DEFAULT_PAGE_SIZE,
 ) -> Dict[str, Any]:
     """Use this for full-text search over extracted document text.
 
@@ -854,15 +925,37 @@ def search_documents(
 
 @_as_tool
 def get_statistics(
-    group_by: str = "company_ticker",
-    ticker: str = "",
-    title_query: str = "",
-    filing_type: str = "",
-    filing_category: str = "",
-    document_status: str = "",
-    exchange: str = "",
-    date_from: str = "",
-    date_to: str = "",
+    group_by: Annotated[
+        GroupBy, Field(description="Dimension to count filings by.")
+    ] = "company_ticker",
+    ticker: Annotated[
+        str,
+        Field(description="Company ticker filter, e.g. 0700.HK; comma-separate to match several."),
+    ] = "",
+    title_query: Annotated[
+        str, Field(description="Case-insensitive substring matched against the filing title.")
+    ] = "",
+    filing_type: Annotated[
+        str,
+        Field(description="Filing type(s), e.g. 'Annual Report'; comma-separate to match several."),
+    ] = "",
+    filing_category: Annotated[
+        str,
+        Field(
+            description="Filing category(ies), e.g. LISTED_COMPANY; comma-separate to match several."
+        ),
+    ] = "",
+    document_status: Annotated[
+        str,
+        Field(
+            description="Document status(es): processed, skipped, failed, or unprocessed; comma-separate to match several."
+        ),
+    ] = "",
+    exchange: Annotated[str, Field(description="Exchange code, e.g. HK.")] = "",
+    date_from: Annotated[
+        str, Field(description="Earliest filing date, YYYY-MM-DD inclusive.")
+    ] = "",
+    date_to: Annotated[str, Field(description="Latest filing date, YYYY-MM-DD inclusive.")] = "",
 ) -> Dict[str, Any]:
     """Use this to count filings grouped by one dimension.
 
@@ -885,7 +978,15 @@ def get_statistics(
 
 @_as_tool
 def list_pending_filings(
-    document_status: str = "unprocessed", limit: int = DEFAULT_PAGE_SIZE
+    document_status: Annotated[
+        str,
+        Field(
+            description="Document status(es): unprocessed (default), processed, skipped, failed; comma-separate for several."
+        ),
+    ] = "unprocessed",
+    limit: Annotated[
+        int, Field(description="Maximum filings to return (1..100).")
+    ] = DEFAULT_PAGE_SIZE,
 ) -> Dict[str, Any]:
     """Use this to list filings by document-processing status.
 
@@ -897,11 +998,21 @@ def list_pending_filings(
 
 @_as_tool
 def get_filing(
-    filing_id: str,
-    include_text: bool = True,
-    text_offset: int = 0,
-    max_text_chars: int = DEFAULT_TEXT_CHARS,
-    include_tables: bool = False,
+    filing_id: Annotated[
+        str, Field(description="16-character filing id; obtain from search_filings.")
+    ],
+    include_text: Annotated[
+        bool, Field(description="Include the extracted document text window.")
+    ] = True,
+    text_offset: Annotated[
+        int, Field(description="Character offset into document_text for paging.")
+    ] = 0,
+    max_text_chars: Annotated[
+        int, Field(description="Maximum characters of text to return (0..200000).")
+    ] = DEFAULT_TEXT_CHARS,
+    include_tables: Annotated[
+        bool, Field(description="Include extracted document tables.")
+    ] = False,
 ) -> Dict[str, Any]:
     """Use this to read one filing's metadata and extracted document content.
 
@@ -915,10 +1026,18 @@ def get_filing(
 
 @_as_tool
 def get_filings(
-    filing_ids: List[str],
-    include_text: bool = False,
-    max_text_chars: int = DEFAULT_TEXT_CHARS,
-    include_tables: bool = False,
+    filing_ids: Annotated[
+        List[str], Field(description="Filing ids to fetch (1..50); obtain from search_filings.")
+    ],
+    include_text: Annotated[
+        bool, Field(description="Include the extracted document text window (off by default).")
+    ] = False,
+    max_text_chars: Annotated[
+        int, Field(description="Maximum characters of text to return (0..200000).")
+    ] = DEFAULT_TEXT_CHARS,
+    include_tables: Annotated[
+        bool, Field(description="Include extracted document tables.")
+    ] = False,
 ) -> Dict[str, Any]:
     """Use this to read several filings in one call (up to 50 ids).
 
@@ -930,7 +1049,11 @@ def get_filings(
 
 @_as_tool
 def get_coverage(
-    date_from: str = "", date_to: str = "", limit: int = MAX_COVERAGE_ROWS
+    date_from: Annotated[str, Field(description="Filter by chunk month, YYYY-MM-DD.")] = "",
+    date_to: Annotated[str, Field(description="Filter by chunk month, YYYY-MM-DD.")] = "",
+    limit: Annotated[
+        int, Field(description="Maximum coverage rows to return (1..200).")
+    ] = MAX_COVERAGE_ROWS,
 ) -> Dict[str, Any]:
     """Use this to report scrape coverage per monthly chunk, with totals.
 
@@ -991,7 +1114,7 @@ def build_server() -> "FastMCP":
             'MCP support is not installed; install with: pip install "hkex-filing-scraper[mcp]"'
         )
     annotations = ToolAnnotations(  # type: ignore[misc]
-        readOnlyHint=True, destructiveHint=False, openWorldHint=False
+        readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
     )
     server = FastMCP(SERVER_NAME, instructions=INSTRUCTIONS)  # type: ignore[misc]
     for tool in TOOLS:

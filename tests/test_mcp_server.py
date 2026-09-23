@@ -18,7 +18,12 @@ pytest.importorskip("mcp")
 from mcp.server.fastmcp.exceptions import ToolError  # noqa: E402
 
 from hkex_scraper import mcp_server  # noqa: E402
-from hkex_scraper.sinks.base import FilingQuery, SinkCapabilities  # noqa: E402
+from hkex_scraper.sinks.base import (  # noqa: E402
+    AGGREGATE_GROUPS,
+    SEARCH_ORDER_BY,
+    FilingQuery,
+    SinkCapabilities,
+)
 
 
 class FakeSink:
@@ -289,6 +294,29 @@ def test_build_server_registers_every_tool_read_only():
         assert tool.annotations.readOnlyHint is True
         assert tool.annotations.destructiveHint is False
         assert tool.annotations.openWorldHint is False
+        assert tool.annotations.idempotentHint is True
+
+
+def _schemas_by_tool():
+    server = mcp_server.build_server()
+    tools = asyncio.run(server.list_tools())
+    return {tool.name: tool.inputSchema for tool in tools}
+
+
+def test_every_parameter_has_a_description():
+    for tool_name, schema in _schemas_by_tool().items():
+        for param, spec in (schema.get("properties") or {}).items():
+            assert spec.get("description"), f"{tool_name}.{param} has no description"
+
+
+def test_order_by_and_group_by_are_enums():
+    schemas = _schemas_by_tool()
+    order_by = schemas["search_filings"]["properties"]["order_by"]
+    assert order_by["type"] == "string"
+    assert set(order_by["enum"]) == set(SEARCH_ORDER_BY)
+    group_by = schemas["get_statistics"]["properties"]["group_by"]
+    assert group_by["type"] == "string"
+    assert set(group_by["enum"]) == set(AGGREGATE_GROUPS)
 
 
 def test_search_documents_requires_query(fake_read):
