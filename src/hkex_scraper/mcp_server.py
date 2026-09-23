@@ -728,6 +728,7 @@ def _as_tool(fn: Callable[..., Any]) -> Callable[..., Any]:
 def get_server_info() -> Dict[str, Any]:
     """Use this first to learn the server version, configured sinks, and read sink.
 
+    Use get_config for the raw configuration values or list_sinks for per-sink detail.
     Returns server metadata only; it reads no filings. This tool is read-only.
     """
     return _tool_get_server_info()
@@ -737,8 +738,10 @@ def get_server_info() -> Dict[str, Any]:
 def list_sinks() -> Dict[str, Any]:
     """Use this when the user asks which databases are configured or their capabilities.
 
-    Returns every known sink id with its license, optional extra, configured/available
-    status, per-sink capabilities, and which sink serves reads. Reads no filings.
+    Use get_config for the raw DATABASE_TARGET string or get_server_info for a one-line
+    summary instead. Returns every known sink id with its license, optional extra,
+    configured/available status, per-sink capabilities, and which sink serves reads. Reads
+    no filings.
     """
     return _tool_list_sinks()
 
@@ -747,6 +750,8 @@ def list_sinks() -> Dict[str, Any]:
 def get_config() -> Dict[str, Any]:
     """Use this to inspect the active configuration (DATABASE_TARGET, read sink, graph).
 
+    Prefer this over list_sinks when you need the raw config values rather than per-sink
+    capabilities, and over get_server_info when you need more than a one-line summary.
     Never returns credentials. This tool is read-only.
     """
     return _tool_get_config()
@@ -766,7 +771,8 @@ def describe_schema() -> Dict[str, Any]:
 def count_filings() -> Dict[str, Any]:
     """Use this to report how many filings each configured sink holds.
 
-    Returns a per-sink count (or a per-sink error). Counts only; it does not return rows.
+    Use get_statistics instead to break the count down by a dimension. Returns a per-sink
+    count (or a per-sink error). Counts only; it does not return rows.
     """
     return _tool_count_filings()
 
@@ -780,7 +786,8 @@ def list_tickers(
 ) -> Dict[str, Any]:
     """Use this to list the distinct company tickers that have filings.
 
-    Returns a sorted, paged list. Use search_filings to fetch filings for a ticker.
+    Use list_companies instead to include company names and filing counts. Returns a
+    sorted, paged list. Use search_filings to fetch filings for a ticker.
     """
     return _tool_list_tickers(limit, offset)
 
@@ -794,8 +801,8 @@ def list_companies(
 ) -> Dict[str, Any]:
     """Use this to list companies (ticker and name) with their filing counts.
 
-    Returns a paged list ordered by filing count. Use search_filings for a company's
-    filings. This tool is read-only.
+    Use list_tickers instead to list just the ticker codes. Returns a paged list ordered
+    by filing count. Use search_filings for a company's filings. This tool is read-only.
     """
     return _tool_list_companies(limit, offset)
 
@@ -849,12 +856,14 @@ def search_filings(
 ) -> Dict[str, Any]:
     """Use this to find filings by ticker, type, status, date range, or title text.
 
-    Filters are optional and combinable; comma-separate a value to match several (e.g.
-    ``filing_type="Annual Report,Dividend"``). ``document_status`` accepts the real statuses
-    plus ``unprocessed`` (no document yet). ``date_from``/``date_to`` are ``YYYY-MM-DD``
-    inclusive. ``order_by`` is one of filing_date_desc (default), filing_date_asc,
-    title_asc, filing_id_asc. Returns complete filing rows (no document text); call
-    get_filing for the document. This tool is read-only.
+    Prefer search_documents for full-text search over extracted text, and get_filing or
+    get_filings to read filings whose ids you already have. Filters are optional and
+    combinable; comma-separate a value to match several (e.g. ``filing_type="Annual
+    Report,Dividend"``). ``document_status`` accepts the real statuses plus ``unprocessed``
+    (no document yet). ``date_from``/``date_to`` are ``YYYY-MM-DD`` inclusive. ``order_by``
+    is one of filing_date_desc (default), filing_date_asc, title_asc, filing_id_asc.
+    Returns paged filing rows (no document text); call get_filing for the document. This
+    tool is read-only.
     """
     return _tool_search_filings(
         ticker,
@@ -906,9 +915,10 @@ def search_documents(
 ) -> Dict[str, Any]:
     """Use this for full-text search over extracted document text.
 
-    Matches ``text_query`` case-insensitively inside ``document_text`` and returns filing
-    rows with a ``snippet`` when the sink supports it (see ``snippets_supported``). Returns
-    nothing until documents are processed. This tool is read-only.
+    Use search_filings instead to filter by metadata without a text query. Matches
+    ``text_query`` case-insensitively inside ``document_text`` and returns filing rows with
+    a ``snippet`` when the sink supports it (see ``snippets_supported``). Returns nothing
+    until documents are processed. This tool is read-only.
     """
     return _tool_search_documents(
         text_query,
@@ -959,9 +969,10 @@ def get_statistics(
 ) -> Dict[str, Any]:
     """Use this to count filings grouped by one dimension.
 
-    ``group_by`` is one of: company_ticker (default), filing_type, filing_category,
-    document_status, exchange. Optional filters narrow the population. Returns buckets
-    sorted by count descending plus the total. This tool is read-only.
+    Use count_filings instead for a plain per-sink total without a breakdown. ``group_by``
+    is one of: company_ticker (default), filing_type, filing_category, document_status,
+    exchange. Optional filters narrow the population. Returns buckets sorted by count
+    descending plus the total. This tool is read-only.
     """
     return _tool_get_statistics(
         group_by,
@@ -990,8 +1001,9 @@ def list_pending_filings(
 ) -> Dict[str, Any]:
     """Use this to list filings by document-processing status.
 
-    Defaults to ``unprocessed`` (no document yet); accepts processed, skipped, failed, or a
-    comma-separated mix. Returns the total (when known) and up to ``limit`` filing rows.
+    Use search_filings instead for arbitrary metadata filters. Defaults to ``unprocessed``
+    (no document yet); accepts processed, skipped, failed, or a comma-separated mix.
+    Returns the total (when known) and up to ``limit`` filing rows.
     """
     return _tool_list_pending_filings(document_status, limit)
 
@@ -1041,8 +1053,9 @@ def get_filings(
 ) -> Dict[str, Any]:
     """Use this to read several filings in one call (up to 50 ids).
 
-    Returns each filing's metadata plus, when ``include_text`` is true, a bounded text
-    window. Ids not found are listed in ``not_found``. Text is off by default. Read-only.
+    Use get_filing instead to read a single filing. Returns each filing's metadata plus,
+    when ``include_text`` is true, a bounded text window. Ids not found are listed in
+    ``not_found``. Text is off by default. Read-only.
     """
     return _tool_get_filings(filing_ids, include_text, max_text_chars, include_tables)
 
@@ -1067,8 +1080,9 @@ def get_coverage(
 def get_parity() -> Dict[str, Any]:
     """Use this to compare filing counts across two or more configured sinks.
 
-    Returns per-sink counts and the spread; ``parity`` is OK when the spread is zero.
-    Requires two or more configured sinks. This tool is read-only.
+    Use verify_sinks instead for a hash-level comparison of individual filings. Returns
+    per-sink counts and the spread; ``parity`` is OK when the spread is zero. Requires two
+    or more configured sinks. This tool is read-only.
     """
     return _tool_get_parity()
 
@@ -1077,9 +1091,10 @@ def get_parity() -> Dict[str, Any]:
 def verify_sinks() -> Dict[str, Any]:
     """Use this to check that configured sinks hold the same filings and document hashes.
 
-    Compares (filing_id, document_sha256) sets across comparable sinks and returns a
-    bounded sample of any missing/extra/mismatched ids. Requires two or more comparable
-    sinks. This tool is read-only.
+    Use get_parity instead for a quicker count-only check. Compares (filing_id,
+    document_sha256) sets across comparable sinks and returns a bounded sample of any
+    missing/extra/mismatched ids. Requires two or more comparable sinks. This tool is
+    read-only.
     """
     return _tool_verify_sinks()
 
