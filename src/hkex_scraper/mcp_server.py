@@ -882,8 +882,10 @@ def get_server_info(
     """Use this first to learn the server version, configured sinks, and read sink.
 
     Use get_config for the raw configuration values or list_sinks for per-sink detail.
-    Pass ``include="sinks"`` or ``include="config"`` to fetch that detail in the same call.
-    Returns server metadata only; it reads no filings. This tool is read-only.
+    ``include`` is one of: summary (server metadata only, default), sinks (also returns the
+    list_sinks payload), or config (also returns the get_config payload) — so you can pull
+    the summary and the detail in a single call. Returns server metadata only; it reads no
+    filings. This tool is read-only.
     """
     return _tool_get_server_info(include)
 
@@ -915,8 +917,9 @@ def get_config(
 
     Prefer this over list_sinks when you need the raw config values rather than per-sink
     capabilities, and over get_server_info when you need more than a one-line summary.
-    Pass ``key`` to return one value instead of the whole map. Never returns credentials.
-    This tool is read-only.
+    Pass ``key`` to return one value; valid keys are database_target, sink_ids, read_sink,
+    company_table, company_id_pattern, and max_download_workers. Empty returns the whole
+    map. Never returns credentials. This tool is read-only.
     """
     return _tool_get_config(key)
 
@@ -1068,8 +1071,9 @@ def search_filings(
     get_filings to read filings whose ids you already have. Filters are optional and
     combinable; comma-separate a value to match several (e.g. ``filing_type="Annual
     Report,Dividend"``). ``document_status`` accepts the real statuses plus ``unprocessed``
-    (no document yet). ``source`` and ``document_type`` further narrow the origin/format.
-    ``date_from``/``date_to`` are ``YYYY-MM-DD`` inclusive. ``order_by`` is one of
+    (no document yet). ``document_type`` accepts pdf, html, xlsx, docx, or unknown, and
+    ``source`` is a free-text origin like HKEx. ``date_from``/``date_to`` are ``YYYY-MM-DD``
+    inclusive. ``order_by`` is one of
     filing_date_desc (default), filing_date_asc, title_asc, filing_id_asc. Returns paged
     filing rows (no document text); call get_filing for the document. This tool is read-only.
     """
@@ -1131,9 +1135,10 @@ def search_documents(
 
     Use search_filings instead to filter by metadata without a text query. Matches
     ``text_query`` case-insensitively inside ``document_text`` and returns filing rows with
-    a ``snippet`` when the sink supports it (see ``snippets_supported``). ``source`` and
-    ``document_type`` further narrow the origin/format. Returns nothing until documents are
-    processed. This tool is read-only.
+    a ``snippet`` when the sink supports it (see ``snippets_supported``). ``document_type``
+    accepts pdf, html, xlsx, docx, or unknown; ``source`` is a free-text origin like HKEx.
+    All filters combine with AND semantics (a filing must match every filter you set).
+    Returns nothing until documents are processed. This tool is read-only.
     """
     return _tool_search_documents(
         text_query,
@@ -1320,9 +1325,10 @@ def get_parity(
     """Use this to compare filing counts across two or more configured sinks.
 
     Use verify_sinks instead for a hash-level comparison of individual filings. Returns
-    per-sink counts and the spread; ``parity`` is OK when the spread is zero. Requires two
-    or more configured sinks; pass ``sinks`` to compare only a subset. This tool is
-    read-only.
+    per-sink counts and the spread; ``parity`` is OK when the spread is zero. ``sinks`` is a
+    comma-separated list of sink ids (discover them via list_sinks); empty compares every
+    configured sink, and the subset must still contain at least two sinks or the call fails.
+    This tool is read-only.
     """
     return _tool_get_parity(sinks)
 
@@ -1340,8 +1346,9 @@ def verify_sinks(
 
     Use get_parity instead for a quicker count-only check. Compares (filing_id,
     document_sha256) sets across comparable sinks and returns a bounded sample of any
-    missing/extra/mismatched ids; ``sample_size`` caps each sample and ``sinks`` restricts
-    the comparison. Requires two or more comparable sinks. This tool is read-only.
+    missing/extra/mismatched ids. ``sample_size`` caps each sample to 1..50 examples;
+    ``sinks`` is a comma-separated list of sink ids (see list_sinks) that must still contain
+    at least two sinks. Requires two or more comparable sinks. This tool is read-only.
     """
     return _tool_verify_sinks(sample_size, sinks)
 
@@ -1366,9 +1373,11 @@ def list_references(
 
     Use search_filings(ticker=...) for a company's own filings or search_filings(
     referenced_ticker=...) to find mentions via the filing column. This reads the canonical
-    edge tables: ``kind="referenced_by"`` returns filings whose title mentions the company
-    (cross-references), ``kind="owned"`` returns the company's own filings. Requires graph
-    linking to have been run. This tool is read-only.
+    edge tables keyed on ``ticker`` (format like 0700.HK; discover valid values via
+    list_tickers): ``kind="referenced_by"`` returns filings whose title mentions the company
+    (cross-references), ``kind="owned"`` returns the company's own filings. Results are
+    paged via ``limit``/``offset`` and stay empty until graph linking has been run. This
+    tool is read-only.
     """
     return _tool_list_references(ticker, kind, limit, offset)
 
