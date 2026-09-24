@@ -81,6 +81,7 @@ All tools are annotated `readOnlyHint: true`, `destructiveHint: false`, and
 | `get_coverage` | Per-chunk scrape coverage, with a date filter and totals. |
 | `get_parity` | Per-sink filing counts and the spread (two or more sinks). |
 | `verify_sinks` | Cross-sink comparison of filing ids and document hashes (two or more sinks). |
+| `list_references` | Graph edges for a company: `referenced_by` (filings that mention it) or `owned` (its own filings). |
 
 List results carry an explicit completeness envelope — `returned_count`, `total_count`,
 `has_more`, and `next_offset` — so a client can tell a full page from a partial one.

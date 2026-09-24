@@ -56,6 +56,10 @@ class FakeSink:
     def count_filings(self) -> Tuple[int, str]:
         return 2, ""
 
+    def count_matching(self, query: FilingQuery) -> Tuple[int, str]:
+        rows, _ = self.search_filings(query, 0, 1000)
+        return len(rows), ""
+
     def distinct_company_tickers(self) -> Tuple[List[str], str]:
         return ["0700.HK", "0001.HK"], ""
 
@@ -141,6 +145,22 @@ class FakeSink:
 
     def read_filing_digests(self) -> Tuple[List[Dict[str, Any]], str]:
         return [{"filing_id": "f1", "document_sha256": "a" * 64}], ""
+
+    def list_edges(
+        self, kind: str, company_id: str, limit: int, offset: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        if kind == "has_filing":
+            rows = [{"company_id": company_id, "filing_id": f["filing_id"]} for f in self._TITLES]
+        else:
+            rows = [
+                {
+                    "filing_id": f["filing_id"],
+                    "company_id": company_id,
+                    "source": "title_extraction",
+                }
+                for f in self._TITLES
+            ]
+        return rows[offset : offset + limit], ""
 
     # -- writes must never be reached -------------------------------------
     def _no_write(self, *args: Any, **kwargs: Any) -> None:
@@ -369,3 +389,88 @@ def test_list_pending_filings_status_filter(fake_read):
     result = mcp_server.list_pending_filings(document_status="unprocessed")
     assert result["document_status"] == ["unprocessed"]
     assert result["returned_count"] == 2
+
+
+def test_list_pending_filings_pages_with_offset(fake_read):
+    result = mcp_server.list_pending_filings(document_status="unprocessed", offset=1)
+    assert result["returned_count"] == 1
+
+
+def test_get_config_returns_a_single_key(fake_read):
+    result = mcp_server.get_config(key="database_target")
+    assert result["key"] == "database_target"
+    assert "value" in result
+
+
+def test_get_config_rejects_unknown_key(fake_read):
+    with pytest.raises(ToolError) as excinfo:
+        mcp_server.get_config(key="nope")
+    assert "unknown config key" in str(excinfo.value)
+
+
+def test_list_sinks_filters_by_id(fake_read, fake_registry):
+    result = mcp_server.list_sinks(sink_id="sqlite")
+    assert [row["id"] for row in result["sinks"]] == ["sqlite"]
+
+
+def test_describe_schema_sections(fake_read):
+    assert set(mcp_server.describe_schema()) >= {"filing", "document", "query", "filing_types"}
+    assert set(mcp_server.describe_schema(section="filing")) == {"filing"}
+    assert set(mcp_server.describe_schema(section="types")) == {
+        "filing_types",
+        "filing_categories",
+        "document_statuses",
+        "document_types",
+        "graph_edges",
+    }
+
+
+def test_describe_schema_rejects_unknown_section(fake_read):
+    with pytest.raises(ToolError):
+        mcp_server.describe_schema(section="nope")
+
+
+def test_count_filings_filters(fake_read):
+    result = mcp_server.count_filings(ticker="0700.HK")
+    assert result["filtered"] is True
+    assert result["counts"] == {"sqlite": 1}
+
+
+def test_get_statistics_top_n(fake_read):
+    result = mcp_server.get_statistics("company_ticker", top_n=1)
+    assert result["returned_count"] == 1
+    assert result["total_buckets"] == 2
+    assert result["has_more"] is True
+    assert result["total"] == 2
+
+
+def test_get_statistics_min_count(fake_read):
+    result = mcp_server.get_statistics("company_ticker", min_count=2)
+    assert result["buckets"] == []
+    assert result["total_buckets"] == 0
+    assert result["total"] == 2
+
+
+def test_get_server_info_include(fake_read):
+    assert "sinks" not in mcp_server.get_server_info()
+    result = mcp_server.get_server_info(include="sinks")
+    assert "sinks" in result
+    assert "server" in result
+
+
+def test_list_references_shape(fake_read):
+    result = mcp_server.list_references("0700.HK", kind="owned")
+    assert result["kind"] == "owned"
+    assert result["company_id"] == "700_HK"
+    assert result["returned_count"] == 2
+
+
+def test_list_references_referenced_by(fake_read):
+    result = mcp_server.list_references("0700.HK", kind="referenced_by")
+    assert result["kind"] == "referenced_by"
+    assert "source" in result["items"][0]
+
+
+def test_list_references_requires_ticker(fake_read):
+    with pytest.raises(ToolError):
+        mcp_server.list_references("")

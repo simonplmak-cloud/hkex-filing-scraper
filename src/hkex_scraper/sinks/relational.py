@@ -287,10 +287,24 @@ class RelationalSink(Sink):
     def count_filings(self) -> Tuple[int, str]:
         return self._count(self.dialect.count_filings_sql())
 
+    def count_matching(self, query: FilingQuery) -> Tuple[int, str]:
+        sql, params = self.dialect.count_matching_sql(query)
+        return self._count(sql, params)
+
     def count_edges(self, kind: str) -> Tuple[int, str]:
         if kind not in EDGE_KINDS:
             return 0, code(self.id, SUFFIX_PAYLOAD_ERROR)
         return self._count(self.dialect.count_edges_sql(kind))
+
+    def list_edges(
+        self, kind: str, company_id: str, limit: int, offset: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        if kind not in EDGE_KINDS:
+            return [], code(self.id, SUFFIX_PAYLOAD_ERROR)
+        if not company_id:
+            return [], ERR_NONE
+        sql = self.dialect.list_edges_sql(kind)
+        return self._read(sql, [company_id, limit, offset])
 
     def count_pending_filings(self) -> Tuple[int, str]:
         return self._count(self.dialect.count_pending_sql())

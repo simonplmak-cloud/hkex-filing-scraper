@@ -71,8 +71,16 @@ class PostgresSink(Sink):
     def count_filings(self) -> Tuple[int, str]:
         return db_postgres.count_filings()
 
+    def count_matching(self, query: FilingQuery) -> Tuple[int, str]:
+        return db_postgres.count_matching(query)
+
     def count_edges(self, kind: str) -> Tuple[int, str]:
         return db_postgres.count_edges(kind)
+
+    def list_edges(
+        self, kind: str, company_id: str, limit: int, offset: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        return db_postgres.list_edges(kind, company_id, limit, offset)
 
     def count_pending_filings(self) -> Tuple[int, str]:
         return db_postgres.count_pending_filings()

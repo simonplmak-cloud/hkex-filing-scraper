@@ -345,6 +345,15 @@ class Dialect:
             f"ORDER BY {self.q('chunk_from')} DESC"
         )
 
+    def list_edges_sql(self, kind: str) -> str:
+        """Edge rows for one company, keyed by ``company_id`` (``LIMIT``/``OFFSET``)."""
+        table = EDGE_TABLES[kind]
+        cols = self.columns(EDGE_COLUMNS[kind])
+        return (
+            f"SELECT {cols} FROM {self.q(table)} WHERE {self.q('company_id')} = {self.ph} "
+            f"ORDER BY {self.q('filing_id')} ASC LIMIT {self.ph} OFFSET {self.ph}"
+        )
+
     # -- composable search -------------------------------------------------
     def cast_text(self, expr: str) -> str:
         """Cast *expr* to text for a portable ``LIKE`` on a JSON/array column."""
@@ -462,6 +471,12 @@ class Dialect:
             f"SELECT {col} AS {key}, count(*) AS {count} FROM {self.q('exchange_filing')} "
             f"WHERE {where} GROUP BY {col} ORDER BY {count} DESC, {key} ASC LIMIT 200"
         )
+        return sql, params
+
+    def count_matching_sql(self, query: FilingQuery) -> Tuple[str, list]:
+        """Count filings matching *query* without returning rows."""
+        where, params = self._search_where(query)
+        sql = f"SELECT count(*) FROM {self.q('exchange_filing')} WHERE {where}"
         return sql, params
 
     def list_companies_sql(self, limit: int, offset: int) -> Tuple[str, list]:

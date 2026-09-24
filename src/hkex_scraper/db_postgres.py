@@ -733,6 +733,23 @@ def fetch_filing_ids_by_ticker(tickers: List[str]) -> Tuple[List[Dict[str, Any]]
     return _fetch_all(sql, [list(tickers)])
 
 
+def list_edges(
+    kind: str, company_id: str, limit: int, offset: int
+) -> Tuple[List[Dict[str, Any]], str]:
+    """Return graph edges of *kind* for one company, paged."""
+    table = _EDGE_TABLES.get(kind)
+    if not table:
+        return [], ERR_PAYLOAD_ERROR
+    if not company_id:
+        return [], ERR_NONE
+    cols = "company_id, filing_id" if kind == "has_filing" else "filing_id, company_id, source"
+    sql = (
+        f"SELECT {cols} FROM {table} WHERE company_id = %s "
+        f"ORDER BY filing_id ASC LIMIT %s OFFSET %s"
+    )
+    return _fetch_all(sql, [company_id, limit, offset])
+
+
 def distinct_company_tickers() -> Tuple[List[str], str]:
     """Return every distinct non-null company ticker."""
     rows, code = _fetch_all(
@@ -890,6 +907,19 @@ def aggregate_filings(group_by: str, query: FilingQuery) -> Tuple[List[Dict[str,
     if code:
         return [], code
     return [{"key": r.get("key"), "count": int(r.get("count") or 0)} for r in rows], ERR_NONE
+
+
+def count_matching(query: FilingQuery) -> Tuple[int, str]:
+    """Count filings matching *query* without returning rows."""
+    clauses, params = _search_where(query)
+    where = " AND ".join(clauses) if clauses else "TRUE"
+    value, code = _fetch_scalar(f"SELECT count(*) FROM exchange_filing WHERE {where}", params)
+    if code:
+        return 0, code
+    try:
+        return int(value or 0), ERR_NONE
+    except (TypeError, ValueError):
+        return 0, ERR_WRITE_ERROR
 
 
 def list_companies(limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:

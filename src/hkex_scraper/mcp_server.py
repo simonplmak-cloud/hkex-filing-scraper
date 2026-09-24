@@ -29,6 +29,7 @@ from .sinks.base import (
     FilingQuery,
     redact,
 )
+from .utils import ticker_to_record_id
 
 try:  # pragma: no cover - exercised via the mcp extra
     from mcp.server.fastmcp import FastMCP
@@ -59,6 +60,9 @@ MAX_COVERAGE_ROWS = 200
 MAX_TICKERS = 1_000
 MAX_BATCH = 50
 VERIFY_SAMPLE = 5
+MAX_VERIFY_SAMPLE = 50
+MAX_BUCKETS = 200
+DEFAULT_TOP_N = 20
 
 INSTRUCTIONS = (
     "Read-only access to a scraped HKEx regulatory-filings corpus. Reads are served by "
@@ -75,6 +79,9 @@ INSTRUCTIONS = (
 # ``sinks.base.SEARCH_ORDER_BY`` / ``sinks.base.AGGREGATE_GROUPS`` (asserted in tests).
 OrderBy = Literal["filing_date_desc", "filing_date_asc", "title_asc", "filing_id_asc"]
 GroupBy = Literal["company_ticker", "filing_type", "filing_category", "document_status", "exchange"]
+Section = Literal["all", "filing", "document", "types", "query"]
+IncludeKind = Literal["summary", "sinks", "config"]
+ReferenceKind = Literal["referenced_by", "owned"]
 
 
 class McpError(Exception):
@@ -245,8 +252,8 @@ def _window_detail(
 # ---------------------------------------------------------------------------
 # Tool bodies (plain functions, no SDK dependency)
 # ---------------------------------------------------------------------------
-def _tool_get_server_info() -> Dict[str, Any]:
-    return {
+def _tool_get_server_info(include: str = "summary") -> Dict[str, Any]:
+    summary = {
         "name": SERVER_NAME,
         "version": __version__,
         "read_only": True,
@@ -256,23 +263,34 @@ def _tool_get_server_info() -> Dict[str, Any]:
         "read_sink": _read_sink_id(),
         "capabilities": ["read-only", "stdio", "fixed-catalog"],
     }
+    include = (include or "summary").strip() or "summary"
+    if include == "summary":
+        return summary
+    if include == "sinks":
+        return {"server": summary, "sinks": _tool_list_sinks()}
+    if include == "config":
+        return {"server": summary, "config": _tool_get_config()}
+    raise McpError("include must be one of: summary, sinks, config")
 
 
-def _tool_list_sinks() -> Dict[str, Any]:
+def _tool_list_sinks(sink_id: str = "") -> Dict[str, Any]:
     enabled = {sink.id: sink for sink in _enabled_sinks()}
     read_id = _read_sink_id()
+    requested = (sink_id or "").strip()
     rows: List[Dict[str, Any]] = []
-    for sink_id in sinks.known_ids():
-        spec = sinks.spec(sink_id)
-        sink = enabled.get(sink_id)
+    for known_id in sinks.known_ids():
+        if requested and known_id != requested:
+            continue
+        spec = sinks.spec(known_id)
+        sink = enabled.get(known_id)
         row: Dict[str, Any] = {
-            "id": sink_id,
+            "id": known_id,
             "label": spec.label,
             "license": spec.license,
             "open_source": spec.source_available,
             "extra": spec.extra,
             "configured": sink is not None,
-            "is_read_sink": sink_id == read_id,
+            "is_read_sink": known_id == read_id,
         }
         if sink is not None:
             available = sink.available()
@@ -288,11 +306,23 @@ def _tool_list_sinks() -> Dict[str, Any]:
                 "arrays": caps.arrays,
             }
         rows.append(row)
+    if requested and not rows:
+        raise McpError(f"unknown sink id '{requested}'; valid ids: {', '.join(sinks.known_ids())}")
     return {"sinks": rows, "read_sink": read_id}
 
 
-def _tool_get_config() -> Dict[str, Any]:
-    return {
+_CONFIG_KEYS = (
+    "database_target",
+    "sink_ids",
+    "read_sink",
+    "company_table",
+    "company_id_pattern",
+    "max_download_workers",
+)
+
+
+def _tool_get_config(key: str = "") -> Dict[str, Any]:
+    full: Dict[str, Any] = {
         "database_target": config.DATABASE_TARGET,
         "sink_ids": config.sink_ids(),
         "read_sink": _read_sink_id(),
@@ -300,10 +330,16 @@ def _tool_get_config() -> Dict[str, Any]:
         "company_id_pattern": config.COMPANY_ID_PATTERN,
         "max_download_workers": config.MAX_DOWNLOAD_WORKERS,
     }
+    key = (key or "").strip()
+    if not key:
+        return full
+    if key not in full:
+        raise McpError(f"unknown config key '{key}'; valid keys: {', '.join(_CONFIG_KEYS)}")
+    return {"key": key, "value": full[key]}
 
 
-def _tool_describe_schema() -> Dict[str, Any]:
-    return {
+def _tool_describe_schema(section: str = "all") -> Dict[str, Any]:
+    full: Dict[str, Any] = {
         "filing": {
             "filing_id": "string (16-char MD5, primary key)",
             "company_ticker": "string, e.g. 0700.HK",
@@ -370,19 +406,61 @@ def _tool_describe_schema() -> Dict[str, Any]:
         },
     }
 
+    section = (section or "all").strip() or "all"
+    if section == "all":
+        return full
+    if section == "filing":
+        return {"filing": full["filing"]}
+    if section == "document":
+        return {"document": full["document"]}
+    if section == "types":
+        return {
+            "filing_types": full["filing_types"],
+            "filing_categories": full["filing_categories"],
+            "document_statuses": full["document_statuses"],
+            "document_types": full["document_types"],
+            "graph_edges": full["graph_edges"],
+        }
+    if section == "query":
+        return {"query": full["query"]}
+    raise McpError("section must be one of: all, filing, document, types, query")
 
-def _tool_count_filings() -> Dict[str, Any]:
+
+def _tool_count_filings(
+    ticker: str = "",
+    filing_type: str = "",
+    filing_category: str = "",
+    document_status: str = "",
+    date_from: str = "",
+    date_to: str = "",
+) -> Dict[str, Any]:
     configured = _enabled_sinks()
     if not configured:
         raise McpError("no sinks are configured; set DATABASE_TARGET (see get_config)")
+    filtered = any((ticker, filing_type, filing_category, document_status, date_from, date_to))
+    query = (
+        _filing_query(
+            ticker=ticker,
+            filing_type=filing_type,
+            filing_category=filing_category,
+            document_status=document_status,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        if filtered
+        else None
+    )
     counts: Dict[str, Any] = {}
     for sink in configured:
         if not sink.available():
             counts[sink.id] = {"error": redact(sink.unavailable_reason())}
             continue
-        count, error_code = sink.count_filings()
+        if query is None:
+            count, error_code = sink.count_filings()
+        else:
+            count, error_code = sink.count_matching(query)
         counts[sink.id] = count if not error_code else {"error": redact(error_code)[:200]}
-    return {"read_sink": _read_sink_id(), "counts": counts}
+    return {"read_sink": _read_sink_id(), "filtered": filtered, "counts": counts}
 
 
 def _tool_list_tickers(limit: int, offset: int) -> Dict[str, Any]:
@@ -406,6 +484,8 @@ def _tool_search_filings(
     document_status: str = "",
     exchange: str = "",
     referenced_ticker: str = "",
+    source: str = "",
+    document_type: str = "",
     date_from: str = "",
     date_to: str = "",
     order_by: str = "filing_date_desc",
@@ -423,6 +503,8 @@ def _tool_search_filings(
         document_status=document_status,
         exchange=exchange,
         referenced_ticker=referenced_ticker,
+        source=source,
+        document_type=document_type,
         date_from=date_from,
         date_to=date_to,
         order_by=order_by,
@@ -439,6 +521,8 @@ def _tool_search_documents(
     ticker: str = "",
     filing_type: str = "",
     document_status: str = "",
+    source: str = "",
+    document_type: str = "",
     date_from: str = "",
     date_to: str = "",
     order_by: str = "filing_date_desc",
@@ -454,6 +538,8 @@ def _tool_search_documents(
         text_query=text_query,
         filing_type=filing_type,
         document_status=document_status,
+        source=source,
+        document_type=document_type,
         date_from=date_from,
         date_to=date_to,
         order_by=order_by,
@@ -478,11 +564,17 @@ def _tool_get_statistics(
     filing_category: str = "",
     document_status: str = "",
     exchange: str = "",
+    source: str = "",
+    document_type: str = "",
     date_from: str = "",
     date_to: str = "",
+    top_n: int = DEFAULT_TOP_N,
+    min_count: int = 1,
 ) -> Dict[str, Any]:
     if group_by not in AGGREGATE_GROUPS:
         raise McpError(f"group_by must be one of: {', '.join(AGGREGATE_GROUPS)}")
+    top_n = _clamp(top_n, 1, MAX_BUCKETS)
+    min_count = max(0, int(min_count or 0))
     query = _filing_query(
         ticker=ticker,
         title_query=title_query,
@@ -490,6 +582,8 @@ def _tool_get_statistics(
         filing_category=filing_category,
         document_status=document_status,
         exchange=exchange,
+        source=source,
+        document_type=document_type,
         date_from=date_from,
         date_to=date_to,
     )
@@ -497,11 +591,17 @@ def _tool_get_statistics(
     buckets, error_code = sink.aggregate_filings(group_by, query)
     if error_code:
         _fail(error_code, sink.id)
+    total = sum(int(bucket.get("count") or 0) for bucket in buckets)
+    filtered = [bucket for bucket in buckets if int(bucket.get("count") or 0) >= min_count]
+    top = filtered[:top_n]
     return {
         "read_sink": sink.id,
         "group_by": group_by,
-        "buckets": buckets,
-        "total": sum(int(bucket.get("count") or 0) for bucket in buckets),
+        "total": total,
+        "total_buckets": len(filtered),
+        "returned_count": len(top),
+        "has_more": len(filtered) > top_n,
+        "buckets": top,
     }
 
 
@@ -516,13 +616,14 @@ def _tool_list_companies(limit: int = DEFAULT_PAGE_SIZE, offset: int = 0) -> Dic
 
 
 def _tool_list_pending_filings(
-    document_status: str = "unprocessed", limit: int = DEFAULT_PAGE_SIZE
+    document_status: str = "unprocessed", limit: int = DEFAULT_PAGE_SIZE, offset: int = 0
 ) -> Dict[str, Any]:
     limit = _clamp(limit, 1, MAX_PAGE_SIZE)
+    offset = max(0, int(offset or 0))
     statuses = _split(document_status) or ("unprocessed",)
     query = FilingQuery(document_status=statuses)
     sink = _read_sink()
-    rows, error_code = sink.search_filings(query, 0, limit)
+    rows, error_code = sink.search_filings(query, offset, limit)
     if error_code:
         _fail(error_code, sink.id)
     total: Optional[int] = None
@@ -530,13 +631,17 @@ def _tool_list_pending_filings(
         count, count_error = sink.count_pending_filings()
         if not count_error:
             total = count
+    has_more = (total is not None and total > offset + len(rows)) or (
+        total is None and len(rows) >= limit
+    )
     return {
         "read_sink": sink.id,
         "document_status": list(statuses),
         "total_count": total,
         "items": rows,
         "returned_count": len(rows),
-        "has_more": total is not None and total > len(rows),
+        "has_more": has_more,
+        "next_offset": (offset + len(rows)) if has_more else None,
     }
 
 
@@ -621,8 +726,15 @@ def _tool_get_coverage(
     }
 
 
-def _tool_get_parity() -> Dict[str, Any]:
+def _tool_get_parity(sinks_subset: str = "") -> Dict[str, Any]:
     configured = _enabled_sinks()
+    subset = _split(sinks_subset)
+    if subset:
+        by_id = {sink.id: sink for sink in configured}
+        unknown = [name for name in subset if name not in by_id]
+        if unknown:
+            raise McpError(f"unknown sink ids: {', '.join(unknown)}")
+        configured = [by_id[name] for name in subset]
     if len(configured) < 2:
         raise McpError("parity requires two or more configured sinks")
     counts: Dict[str, int] = {}
@@ -641,8 +753,16 @@ def _tool_get_parity() -> Dict[str, Any]:
     }
 
 
-def _tool_verify_sinks() -> Dict[str, Any]:
+def _tool_verify_sinks(sample_size: int = VERIFY_SAMPLE, sinks_subset: str = "") -> Dict[str, Any]:
+    sample_size = _clamp(sample_size, 1, MAX_VERIFY_SAMPLE)
     configured = _enabled_sinks()
+    subset = _split(sinks_subset)
+    if subset:
+        by_id = {sink.id: sink for sink in configured}
+        unknown = [name for name in subset if name not in by_id]
+        if unknown:
+            raise McpError(f"unknown sink ids: {', '.join(unknown)}")
+        configured = [by_id[name] for name in subset]
     if len(configured) < 2:
         raise McpError("verify requires two or more configured sinks")
     digests: Dict[str, Dict[str, str]] = {}
@@ -679,7 +799,7 @@ def _tool_verify_sinks() -> Dict[str, Any]:
                     "sink": sink_id,
                     "kind": "missing",
                     "count": len(missing),
-                    "sample": missing[:VERIFY_SAMPLE],
+                    "sample": missing[:sample_size],
                 }
             )
         if extra:
@@ -688,7 +808,7 @@ def _tool_verify_sinks() -> Dict[str, Any]:
                     "sink": sink_id,
                     "kind": "extra",
                     "count": len(extra),
-                    "sample": extra[:VERIFY_SAMPLE],
+                    "sample": extra[:sample_size],
                 }
             )
         if mismatched:
@@ -697,7 +817,7 @@ def _tool_verify_sinks() -> Dict[str, Any]:
                     "sink": sink_id,
                     "kind": "hash_mismatch",
                     "count": len(mismatched),
-                    "sample": mismatched[:VERIFY_SAMPLE],
+                    "sample": mismatched[:sample_size],
                 }
             )
     return {
@@ -705,6 +825,32 @@ def _tool_verify_sinks() -> Dict[str, Any]:
         "reference": reference_id,
         "ok": not problems,
         "problems": problems,
+    }
+
+
+_REFERENCE_KINDS = {"owned": "has_filing", "referenced_by": "references_filing"}
+
+
+def _tool_list_references(ticker: str, kind: str, limit: int, offset: int) -> Dict[str, Any]:
+    ticker = (ticker or "").strip()
+    if not ticker:
+        raise McpError("ticker is required; use list_tickers to discover tickers")
+    edge_kind = _REFERENCE_KINDS.get(kind)
+    if edge_kind is None:
+        raise McpError("kind must be one of: referenced_by, owned")
+    limit = _clamp(limit, 1, MAX_PAGE_SIZE)
+    offset = max(0, int(offset or 0))
+    company_id = ticker_to_record_id(ticker)
+    sink = _read_sink()
+    rows, error_code = sink.list_edges(edge_kind, company_id, limit, offset)
+    if error_code:
+        _fail(error_code, sink.id)
+    return {
+        "read_sink": sink.id,
+        "ticker": ticker,
+        "company_id": company_id,
+        "kind": kind,
+        **_page(rows, offset, limit),
     }
 
 
@@ -725,57 +871,113 @@ def _as_tool(fn: Callable[..., Any]) -> Callable[..., Any]:
 
 
 @_as_tool
-def get_server_info() -> Dict[str, Any]:
+def get_server_info(
+    include: Annotated[
+        IncludeKind,
+        Field(
+            description="summary (server metadata only), sinks, or config; sinks/config fold in list_sinks/get_config output."
+        ),
+    ] = "summary",
+) -> Dict[str, Any]:
     """Use this first to learn the server version, configured sinks, and read sink.
 
     Use get_config for the raw configuration values or list_sinks for per-sink detail.
+    Pass ``include="sinks"`` or ``include="config"`` to fetch that detail in the same call.
     Returns server metadata only; it reads no filings. This tool is read-only.
     """
-    return _tool_get_server_info()
+    return _tool_get_server_info(include)
 
 
 @_as_tool
-def list_sinks() -> Dict[str, Any]:
+def list_sinks(
+    sink_id: Annotated[
+        str, Field(description="Narrow to a single sink id, e.g. 'postgres'; empty returns all.")
+    ] = "",
+) -> Dict[str, Any]:
     """Use this when the user asks which databases are configured or their capabilities.
 
     Use get_config for the raw DATABASE_TARGET string or get_server_info for a one-line
-    summary instead. Returns every known sink id with its license, optional extra,
-    configured/available status, per-sink capabilities, and which sink serves reads. Reads
-    no filings.
+    summary instead. Pass ``sink_id`` to inspect one sink without the full list. Returns
+    every known sink id with its license, optional extra, configured/available status,
+    per-sink capabilities, and which sink serves reads. Reads no filings.
     """
-    return _tool_list_sinks()
+    return _tool_list_sinks(sink_id)
 
 
 @_as_tool
-def get_config() -> Dict[str, Any]:
+def get_config(
+    key: Annotated[
+        str,
+        Field(description="Return a single setting, e.g. 'database_target'; empty returns all."),
+    ] = "",
+) -> Dict[str, Any]:
     """Use this to inspect the active configuration (DATABASE_TARGET, read sink, graph).
 
     Prefer this over list_sinks when you need the raw config values rather than per-sink
     capabilities, and over get_server_info when you need more than a one-line summary.
-    Never returns credentials. This tool is read-only.
+    Pass ``key`` to return one value instead of the whole map. Never returns credentials.
+    This tool is read-only.
     """
-    return _tool_get_config()
+    return _tool_get_config(key)
 
 
 @_as_tool
-def describe_schema() -> Dict[str, Any]:
+def describe_schema(
+    section: Annotated[
+        Section,
+        Field(
+            description="Narrow to one section: filing, document, types, query, or all (default)."
+        ),
+    ] = "all",
+) -> Dict[str, Any]:
     """Use this before filtering or interpreting results to learn the canonical fields.
 
     Use search_filings or search_documents to query filings once you know the field names.
-    Returns the filing and document field names with types, plus the known filing types,
-    categories, document statuses, and graph edge kinds. Reads no filings.
+    Pass ``section`` to return just one section (saves tokens); default returns everything:
+    filing and document fields, the known filing types/categories/statuses/types, graph
+    edge kinds, and the supported query filters. Reads no filings.
     """
-    return _tool_describe_schema()
+    return _tool_describe_schema(section)
 
 
 @_as_tool
-def count_filings() -> Dict[str, Any]:
+def count_filings(
+    ticker: Annotated[
+        str,
+        Field(description="Count only this ticker, e.g. 0700.HK; comma-separate to match several."),
+    ] = "",
+    filing_type: Annotated[
+        str,
+        Field(
+            description="Count only this filing type, e.g. 'Annual Report'; comma-separate for several."
+        ),
+    ] = "",
+    filing_category: Annotated[
+        str, Field(description="Count only this filing category, e.g. LISTED_COMPANY.")
+    ] = "",
+    document_status: Annotated[
+        str,
+        Field(
+            description="Count only this document status: processed, skipped, failed, or unprocessed."
+        ),
+    ] = "",
+    date_from: Annotated[
+        str, Field(description="Count only filings on/after this date, YYYY-MM-DD inclusive.")
+    ] = "",
+    date_to: Annotated[
+        str, Field(description="Count only filings on/before this date, YYYY-MM-DD inclusive.")
+    ] = "",
+) -> Dict[str, Any]:
     """Use this to report how many filings each configured sink holds.
 
-    Use get_statistics instead to break the count down by a dimension. Returns a per-sink
-    count (or a per-sink error). Counts only; it does not return rows.
+    Use get_statistics instead to break the count down by a dimension. With no filters this
+    returns a per-sink total; with filters it returns the count of matching filings per sink
+    (relational sinks only — others report an unsupported error). Counts only; it does not
+    return rows.
     """
-    return _tool_count_filings()
+    return _tool_count_filings(
+        ticker, filing_type, filing_category, document_status, date_from, date_to
+    )
 
 
 @_as_tool
@@ -844,6 +1046,10 @@ def search_filings(
     referenced_ticker: Annotated[
         str, Field(description="Ticker referenced by the filing (graph edge).")
     ] = "",
+    source: Annotated[str, Field(description="Source of the filing, e.g. HKEx.")] = "",
+    document_type: Annotated[
+        str, Field(description="Document type: pdf, html, xlsx, docx, or unknown.")
+    ] = "",
     date_from: Annotated[
         str, Field(description="Earliest filing date, YYYY-MM-DD inclusive.")
     ] = "",
@@ -862,10 +1068,10 @@ def search_filings(
     get_filings to read filings whose ids you already have. Filters are optional and
     combinable; comma-separate a value to match several (e.g. ``filing_type="Annual
     Report,Dividend"``). ``document_status`` accepts the real statuses plus ``unprocessed``
-    (no document yet). ``date_from``/``date_to`` are ``YYYY-MM-DD`` inclusive. ``order_by``
-    is one of filing_date_desc (default), filing_date_asc, title_asc, filing_id_asc.
-    Returns paged filing rows (no document text); call get_filing for the document. This
-    tool is read-only.
+    (no document yet). ``source`` and ``document_type`` further narrow the origin/format.
+    ``date_from``/``date_to`` are ``YYYY-MM-DD`` inclusive. ``order_by`` is one of
+    filing_date_desc (default), filing_date_asc, title_asc, filing_id_asc. Returns paged
+    filing rows (no document text); call get_filing for the document. This tool is read-only.
     """
     return _tool_search_filings(
         ticker,
@@ -876,6 +1082,8 @@ def search_filings(
         document_status,
         exchange,
         referenced_ticker,
+        source,
+        document_type,
         date_from,
         date_to,
         order_by,
@@ -903,6 +1111,10 @@ def search_documents(
             description="Document status(es): processed, skipped, failed, or unprocessed; comma-separate to match several."
         ),
     ] = "",
+    source: Annotated[str, Field(description="Source of the filing, e.g. HKEx.")] = "",
+    document_type: Annotated[
+        str, Field(description="Document type: pdf, html, xlsx, docx, or unknown.")
+    ] = "",
     date_from: Annotated[
         str, Field(description="Earliest filing date, YYYY-MM-DD inclusive.")
     ] = "",
@@ -919,14 +1131,17 @@ def search_documents(
 
     Use search_filings instead to filter by metadata without a text query. Matches
     ``text_query`` case-insensitively inside ``document_text`` and returns filing rows with
-    a ``snippet`` when the sink supports it (see ``snippets_supported``). Returns nothing
-    until documents are processed. This tool is read-only.
+    a ``snippet`` when the sink supports it (see ``snippets_supported``). ``source`` and
+    ``document_type`` further narrow the origin/format. Returns nothing until documents are
+    processed. This tool is read-only.
     """
     return _tool_search_documents(
         text_query,
         ticker,
         filing_type,
         document_status,
+        source,
+        document_type,
         date_from,
         date_to,
         order_by,
@@ -964,18 +1179,27 @@ def get_statistics(
         ),
     ] = "",
     exchange: Annotated[str, Field(description="Exchange code, e.g. HK.")] = "",
+    source: Annotated[str, Field(description="Source of the filing, e.g. HKEx.")] = "",
+    document_type: Annotated[
+        str, Field(description="Document type: pdf, html, xlsx, docx, or unknown.")
+    ] = "",
     date_from: Annotated[
         str, Field(description="Earliest filing date, YYYY-MM-DD inclusive.")
     ] = "",
     date_to: Annotated[str, Field(description="Latest filing date, YYYY-MM-DD inclusive.")] = "",
+    top_n: Annotated[int, Field(description="Maximum buckets to return (1..200).")] = DEFAULT_TOP_N,
+    min_count: Annotated[
+        int, Field(description="Only return buckets with at least this many filings (0 = all).")
+    ] = 1,
 ) -> Dict[str, Any]:
     """Use this to count filings grouped by one dimension.
 
     Use count_filings instead for a plain per-sink total without a breakdown. ``group_by``
     is one of: company_ticker (default), filing_type, filing_category, document_status,
     exchange. Optional filters narrow the population and combine with AND semantics (a
-    filing must match every filter you set). Returns buckets sorted by count descending
-    plus the total. This tool is read-only.
+    filing must match every filter you set). ``top_n`` caps the returned buckets and
+    ``min_count`` drops small buckets, but ``total`` still counts every matching filing.
+    Buckets are sorted by count descending. This tool is read-only.
     """
     return _tool_get_statistics(
         group_by,
@@ -985,8 +1209,12 @@ def get_statistics(
         filing_category,
         document_status,
         exchange,
+        source,
+        document_type,
         date_from,
         date_to,
+        top_n,
+        min_count,
     )
 
 
@@ -1001,15 +1229,16 @@ def list_pending_filings(
     limit: Annotated[
         int, Field(description="Maximum filings to return (1..100).")
     ] = DEFAULT_PAGE_SIZE,
+    offset: Annotated[int, Field(description="Zero-based offset for paging.")] = 0,
 ) -> Dict[str, Any]:
     """Use this to list filings by document-processing status.
 
-    Use search_filings instead for arbitrary metadata filters or offset pagination. Defaults
-    to ``unprocessed`` (no document yet); accepts processed, skipped, failed, or a
-    comma-separated mix. ``total_count`` is only populated for the default ``unprocessed``
-    status; other statuses return up to ``limit`` rows without a total.
+    Use search_filings instead for arbitrary metadata filters. Defaults to ``unprocessed``
+    (no document yet); accepts processed, skipped, failed, or a comma-separated mix.
+    ``total_count`` is only populated for the default ``unprocessed`` status; other statuses
+    report ``has_more`` from a full page without a total. ``offset`` pages through results.
     """
-    return _tool_list_pending_filings(document_status, limit)
+    return _tool_list_pending_filings(document_status, limit, offset)
 
 
 @_as_tool
@@ -1083,26 +1312,65 @@ def get_coverage(
 
 
 @_as_tool
-def get_parity() -> Dict[str, Any]:
+def get_parity(
+    sinks: Annotated[
+        str, Field(description="Restrict to a subset of sink ids, comma-separated; empty = all.")
+    ] = "",
+) -> Dict[str, Any]:
     """Use this to compare filing counts across two or more configured sinks.
 
     Use verify_sinks instead for a hash-level comparison of individual filings. Returns
     per-sink counts and the spread; ``parity`` is OK when the spread is zero. Requires two
-    or more configured sinks. This tool is read-only.
+    or more configured sinks; pass ``sinks`` to compare only a subset. This tool is
+    read-only.
     """
-    return _tool_get_parity()
+    return _tool_get_parity(sinks)
 
 
 @_as_tool
-def verify_sinks() -> Dict[str, Any]:
+def verify_sinks(
+    sample_size: Annotated[
+        int, Field(description="Max examples to return per problem bucket (1..50).")
+    ] = VERIFY_SAMPLE,
+    sinks: Annotated[
+        str, Field(description="Restrict to a subset of sink ids, comma-separated; empty = all.")
+    ] = "",
+) -> Dict[str, Any]:
     """Use this to check that configured sinks hold the same filings and document hashes.
 
     Use get_parity instead for a quicker count-only check. Compares (filing_id,
     document_sha256) sets across comparable sinks and returns a bounded sample of any
-    missing/extra/mismatched ids. Requires two or more comparable sinks. This tool is
-    read-only.
+    missing/extra/mismatched ids; ``sample_size`` caps each sample and ``sinks`` restricts
+    the comparison. Requires two or more comparable sinks. This tool is read-only.
     """
-    return _tool_verify_sinks()
+    return _tool_verify_sinks(sample_size, sinks)
+
+
+@_as_tool
+def list_references(
+    ticker: Annotated[
+        str, Field(description="Company ticker, e.g. 0700.HK; use list_tickers to discover.")
+    ],
+    kind: Annotated[
+        ReferenceKind,
+        Field(
+            description="referenced_by = filings that mention this company; owned = this company's own filings."
+        ),
+    ] = "referenced_by",
+    limit: Annotated[
+        int, Field(description="Maximum edges to return (1..100).")
+    ] = DEFAULT_PAGE_SIZE,
+    offset: Annotated[int, Field(description="Zero-based offset for paging.")] = 0,
+) -> Dict[str, Any]:
+    """Use this to explore the graph edges between companies and filings.
+
+    Use search_filings(ticker=...) for a company's own filings or search_filings(
+    referenced_ticker=...) to find mentions via the filing column. This reads the canonical
+    edge tables: ``kind="referenced_by"`` returns filings whose title mentions the company
+    (cross-references), ``kind="owned"`` returns the company's own filings. Requires graph
+    linking to have been run. This tool is read-only.
+    """
+    return _tool_list_references(ticker, kind, limit, offset)
 
 
 TOOLS: List[Callable[..., Any]] = [
@@ -1122,6 +1390,7 @@ TOOLS: List[Callable[..., Any]] = [
     get_coverage,
     get_parity,
     verify_sinks,
+    list_references,
 ]
 
 

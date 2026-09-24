@@ -193,8 +193,28 @@ class Sink:
     def count_filings(self) -> Tuple[int, str]:
         return 0, code(self.id, SUFFIX_UNSUPPORTED)
 
+    def count_matching(self, query: FilingQuery) -> Tuple[int, str]:
+        """Count filings matching *query* without returning rows.
+
+        Optional capability: relational sinks implement it via ``count_matching_sql``;
+        sinks that cannot apply filters return ``UNSUPPORTED`` so a caller can fall back
+        to the unfiltered :meth:`count_filings`.
+        """
+        return 0, code(self.id, SUFFIX_UNSUPPORTED)
+
     def count_edges(self, kind: str) -> Tuple[int, str]:
         return 0, code(self.id, SUFFIX_UNSUPPORTED)
+
+    def list_edges(
+        self, kind: str, company_id: str, limit: int, offset: int
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        """Return graph edges of *kind* for one company, paged.
+
+        ``kind`` is ``"has_filing"`` (filings the company owns) or ``"references_filing"``
+        (filings whose title references the company). Rows carry the edge columns; returns
+        ``UNSUPPORTED`` for sinks without an edge read path.
+        """
+        return [], code(self.id, SUFFIX_UNSUPPORTED)
 
     def count_pending_filings(self) -> Tuple[int, str]:
         return 0, code(self.id, SUFFIX_UNSUPPORTED)
