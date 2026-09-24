@@ -761,6 +761,7 @@ def get_config() -> Dict[str, Any]:
 def describe_schema() -> Dict[str, Any]:
     """Use this before filtering or interpreting results to learn the canonical fields.
 
+    Use search_filings or search_documents to query filings once you know the field names.
     Returns the filing and document field names with types, plus the known filing types,
     categories, document statuses, and graph edge kinds. Reads no filings.
     """
@@ -786,8 +787,8 @@ def list_tickers(
 ) -> Dict[str, Any]:
     """Use this to list the distinct company tickers that have filings.
 
-    Use list_companies instead to include company names and filing counts. Returns a
-    sorted, paged list. Use search_filings to fetch filings for a ticker.
+    Use list_companies instead to include company names and filing counts. Returns an
+    alphabetically sorted, paged list. Use search_filings to fetch filings for a ticker.
     """
     return _tool_list_tickers(limit, offset)
 
@@ -801,8 +802,9 @@ def list_companies(
 ) -> Dict[str, Any]:
     """Use this to list companies (ticker and name) with their filing counts.
 
-    Use list_tickers instead to list just the ticker codes. Returns a paged list ordered
-    by filing count. Use search_filings for a company's filings. This tool is read-only.
+    Use list_tickers instead to list just the ticker codes. Returns a paged list ordered by
+    filing count descending. Use search_filings for a company's filings. This tool is
+    read-only.
     """
     return _tool_list_companies(limit, offset)
 
@@ -971,8 +973,9 @@ def get_statistics(
 
     Use count_filings instead for a plain per-sink total without a breakdown. ``group_by``
     is one of: company_ticker (default), filing_type, filing_category, document_status,
-    exchange. Optional filters narrow the population. Returns buckets sorted by count
-    descending plus the total. This tool is read-only.
+    exchange. Optional filters narrow the population and combine with AND semantics (a
+    filing must match every filter you set). Returns buckets sorted by count descending
+    plus the total. This tool is read-only.
     """
     return _tool_get_statistics(
         group_by,
@@ -1001,9 +1004,10 @@ def list_pending_filings(
 ) -> Dict[str, Any]:
     """Use this to list filings by document-processing status.
 
-    Use search_filings instead for arbitrary metadata filters. Defaults to ``unprocessed``
-    (no document yet); accepts processed, skipped, failed, or a comma-separated mix.
-    Returns the total (when known) and up to ``limit`` filing rows.
+    Use search_filings instead for arbitrary metadata filters or offset pagination. Defaults
+    to ``unprocessed`` (no document yet); accepts processed, skipped, failed, or a
+    comma-separated mix. ``total_count`` is only populated for the default ``unprocessed``
+    status; other statuses return up to ``limit`` rows without a total.
     """
     return _tool_list_pending_filings(document_status, limit)
 
@@ -1070,8 +1074,10 @@ def get_coverage(
 ) -> Dict[str, Any]:
     """Use this to report scrape coverage per monthly chunk, with totals.
 
-    Optional ``date_from``/``date_to`` (``YYYY-MM-DD``) filter by chunk month. Returns rows
-    newest-first plus ``totals`` (api/ingested/unique counts and coverage percent). Read-only.
+    Use get_statistics for filing counts grouped by a dimension, or get_parity for cross-sink
+    comparison. ``date_from``/``date_to`` (``YYYY-MM-DD``) filter by chunk month. ``limit``
+    caps how many chunks are returned, but ``totals`` always aggregate the full filtered
+    range. Rows are newest-first. Read-only.
     """
     return _tool_get_coverage(date_from, date_to, limit)
 
