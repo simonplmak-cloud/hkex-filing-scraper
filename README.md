@@ -32,6 +32,28 @@ full-text and table extraction, chunk-level coverage, optional graph linking, an
 It speaks the undocumented HKEx JSON API directly, which is faster and more resilient than
 driving a browser.
 
+## Vendors & integrations
+
+**Databases** — nine first-class destinations, in documented popularity order (see the
+[support matrix](docs/sinks/README.md)):
+
+- [PostgreSQL](docs/sinks/postgresql.md) — production-grade open-source relational
+- [MySQL](docs/sinks/mysql.md) / [MariaDB](docs/sinks/mysql.md) — GPL relational servers, one driver
+- [SQLite](docs/sinks/sqlite.md) — zero-server file database, no install needed
+- [MongoDB](docs/sinks/mongodb.md) — document database
+- [Neo4j](docs/sinks/neo4j.md) — property-graph database
+- [ClickHouse](docs/sinks/clickhouse.md) — columnar analytics engine
+- [DuckDB](docs/sinks/duckdb.md) — in-process analytical engine
+- [SurrealDB](docs/sinks/surrealdb.md) — multi-model graph + document database
+
+**AI clients** — any MCP-capable agent; ready-made configuration for
+[Claude, ChatGPT, Cursor, VS Code/Copilot, Gemini CLI, opencode, Manus, and Perplexity](docs/ai-agents.md).
+
+**Available on** — [PyPI](https://pypi.org/project/hkex-filing-scraper/) ·
+[Glama](https://glama.ai/mcp/servers/simonplmak-cloud/hkex-filing-scraper) ·
+[MCP Registry](https://registry.modelcontextprotocol.io/) ·
+[hosted gateway](https://hkex-listco-updates.ascent-partners.com/api/mcp).
+
 ## Two ways to use it
 
 | | **Hosted MCP gateway** | **Local pipeline** |

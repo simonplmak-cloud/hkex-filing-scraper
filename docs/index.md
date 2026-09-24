@@ -28,6 +28,12 @@ agents can query HKEx live.
 - [AI agent support](ai-agents.md)
 - [Try it locally (`examples/`)](https://github.com/simonplmak-cloud/hkex-filing-scraper/tree/main/examples)
 
+## Vendors & integrations
+
+- **Databases** — nine first-class destinations; see the [support matrix](sinks/README.md).
+- **AI clients** — ready-made configuration for [Claude, ChatGPT, Cursor, VS Code/Copilot, Gemini, opencode, Manus, and Perplexity](ai-agents.md).
+- **Available on** — [PyPI](https://pypi.org/project/hkex-filing-scraper/) · [Glama](https://glama.ai/mcp/servers/simonplmak-cloud/hkex-filing-scraper) · [MCP Registry](https://registry.modelcontextprotocol.io/).
+
 ## Per-sink guides
 
 Every sink is a first-class destination. Rows are in the documented popularity order.
