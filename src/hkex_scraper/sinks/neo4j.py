@@ -554,14 +554,21 @@ class Neo4jSink(Sink):
             return [], err
         return [{"key": r.get("key"), "count": int(r.get("count") or 0)} for r in records], ERR_NONE
 
-    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+    def list_companies(
+        self, limit: int, offset: int, ticker: str = ""
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        where = "f.companyTicker IS NOT NULL AND f.companyTicker <> ''"
+        params: Dict[str, Any] = {"offset": offset, "limit": limit}
+        if ticker:
+            where += " AND toLower(f.companyTicker) CONTAINS toLower($ticker)"
+            params["ticker"] = ticker
         query_text = (
-            "MATCH (f:Filing) WHERE f.companyTicker IS NOT NULL AND f.companyTicker <> '' "
+            f"MATCH (f:Filing) WHERE {where} "
             "RETURN f.companyTicker AS company_ticker, head(collect(f.stockName)) AS stock_name, "
             "count(*) AS filing_count ORDER BY filing_count DESC, company_ticker ASC "
             "SKIP $offset LIMIT $limit"
         )
-        records, _summary, err = self._run(query_text, {"offset": offset, "limit": limit})
+        records, _summary, err = self._run(query_text, params)
         if err:
             return [], err
         return records, ERR_NONE

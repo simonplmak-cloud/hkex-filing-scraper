@@ -121,8 +121,10 @@ class PostgresSink(Sink):
     ) -> Tuple[List[Dict[str, Any]], str]:
         return db_postgres.aggregate_filings(group_by, query)
 
-    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
-        return db_postgres.list_companies(limit, offset)
+    def list_companies(
+        self, limit: int, offset: int, ticker: str = ""
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        return db_postgres.list_companies(limit, offset, ticker)
 
     def fetch_coverage(self) -> Tuple[List[Dict[str, Any]], str]:
         return db_postgres.fetch_coverage()

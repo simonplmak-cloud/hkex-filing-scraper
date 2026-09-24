@@ -738,11 +738,19 @@ class SurrealDBSink(Sink):
             if isinstance(row, dict)
         ], ERR_NONE
 
-    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+    def list_companies(
+        self, limit: int, offset: int, ticker: str = ""
+    ) -> Tuple[List[Dict[str, Any]], str]:
         # ``stock_name`` is not aggregated (SurrealDB has no string max); it is null here.
+        where = "companyTicker IS NOT NONE"
+        if ticker:
+            where += (
+                f" AND string::lowercase(companyTicker) "
+                f"CONTAINS string::lowercase('{escape_sql(ticker)}')"
+            )
         sql = (
             "SELECT companyTicker, count() AS cnt FROM exchange_filing "
-            "WHERE companyTicker IS NOT NONE "
+            f"WHERE {where} "
             f"GROUP BY companyTicker ORDER BY cnt DESC START {offset} LIMIT {limit};"
         )
         result = db.surreal_query(sql, timeout=300)

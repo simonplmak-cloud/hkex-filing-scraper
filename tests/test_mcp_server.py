@@ -132,15 +132,19 @@ class FakeSink:
         ]
         return buckets, ""
 
-    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+    def list_companies(
+        self, limit: int, offset: int, ticker: str = ""
+    ) -> Tuple[List[Dict[str, Any]], str]:
         from collections import Counter
 
         rows, _ = self.search_filings(FilingQuery(), 0, 1000)
         counts = Counter(row["company_ticker"] for row in rows)
         companies = [
-            {"company_ticker": ticker, "stock_name": None, "filing_count": count}
-            for ticker, count in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+            {"company_ticker": tkr, "stock_name": None, "filing_count": count}
+            for tkr, count in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
         ]
+        if ticker:
+            companies = [c for c in companies if ticker.lower() in c["company_ticker"].lower()]
         return companies[offset : offset + limit], ""
 
     def read_filing_digests(self) -> Tuple[List[Dict[str, Any]], str]:
@@ -371,6 +375,16 @@ def test_list_companies_shape(fake_read):
     result = mcp_server.list_companies()
     assert result["items"][0]["company_ticker"] in {"0700.HK", "0001.HK"}
     assert "filing_count" in result["items"][0]
+
+
+def test_list_tickers_filters_by_ticker(fake_read):
+    result = mcp_server.list_tickers(ticker="0700")
+    assert result["items"] == ["0700.HK"]
+
+
+def test_list_companies_filters_by_ticker(fake_read):
+    result = mcp_server.list_companies(ticker="0001")
+    assert [c["company_ticker"] for c in result["items"]] == ["0001.HK"]
 
 
 def test_get_filings_batch(fake_read):

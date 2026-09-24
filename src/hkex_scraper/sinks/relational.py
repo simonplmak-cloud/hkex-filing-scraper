@@ -390,8 +390,10 @@ class RelationalSink(Sink):
             {"key": row.get("key"), "count": int(row.get("count") or 0)} for row in rows
         ], ERR_NONE
 
-    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
-        sql, params = self.dialect.list_companies_sql(limit, offset)
+    def list_companies(
+        self, limit: int, offset: int, ticker: str = ""
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        sql, params = self.dialect.list_companies_sql(limit, offset, ticker)
         return self._read(sql, params)
 
     def read_filing_digests(self) -> Tuple[List[Dict[str, Any]], str]:

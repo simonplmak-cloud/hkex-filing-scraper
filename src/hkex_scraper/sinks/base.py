@@ -273,8 +273,13 @@ class Sink:
         """Group matching filings by ``group_by``; returns ``[{key, count}]`` by count desc."""
         return [], code(self.id, SUFFIX_UNSUPPORTED)
 
-    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
-        """Return distinct companies with a display name and filing count."""
+    def list_companies(
+        self, limit: int, offset: int, ticker: str = ""
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        """Return distinct companies with a display name and filing count.
+
+        ``ticker`` is an optional case-insensitive substring filter; empty returns all.
+        """
         return [], code(self.id, SUFFIX_UNSUPPORTED)
 
     def fetch_coverage(self) -> Tuple[List[Dict[str, Any]], str]:

@@ -619,14 +619,21 @@ class ClickHouseSink(Sink):
             return [], err
         return [{"key": r.get("key"), "count": int(r.get("count") or 0)} for r in rows], ERR_NONE
 
-    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+    def list_companies(
+        self, limit: int, offset: int, ticker: str = ""
+    ) -> Tuple[List[Dict[str, Any]], str]:
+        where = "company_ticker != ''"
+        params: Dict[str, Any] = {"limit": limit, "offset": offset}
+        if ticker:
+            where += " AND lower(company_ticker) LIKE lower({ticker:String})"
+            params["ticker"] = f"%{ticker}%"
         sql = (
             "SELECT company_ticker, max(stock_name) AS stock_name, count() AS filing_count "
-            f"FROM {FILING_TABLE} FINAL WHERE company_ticker != '' GROUP BY company_ticker "
+            f"FROM {FILING_TABLE} FINAL WHERE {where} GROUP BY company_ticker "
             "ORDER BY filing_count DESC, company_ticker ASC "
             "LIMIT {limit:Int32} OFFSET {offset:Int32}"
         )
-        return self._query(sql, {"limit": limit, "offset": offset})
+        return self._query(sql, params)
 
     def fetch_coverage(self) -> Tuple[List[Dict[str, Any]], str]:
         return self._query(

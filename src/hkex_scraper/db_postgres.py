@@ -922,15 +922,21 @@ def count_matching(query: FilingQuery) -> Tuple[int, str]:
         return 0, ERR_WRITE_ERROR
 
 
-def list_companies(limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
-    """Distinct companies with a display name and filing count."""
+def list_companies(limit: int, offset: int, ticker: str = "") -> Tuple[List[Dict[str, Any]], str]:
+    """Distinct companies with a display name and filing count, optionally ticker-filtered."""
+    clauses = ["company_ticker IS NOT NULL", "company_ticker <> ''"]
+    params: List[Any] = []
+    if ticker:
+        clauses.append("LOWER(company_ticker) LIKE LOWER(%s)")
+        params.append(f"%{ticker}%")
+    where = " AND ".join(clauses)
     sql = (
         "SELECT company_ticker, MAX(stock_name) AS stock_name, count(*) AS filing_count "
-        "FROM exchange_filing WHERE company_ticker IS NOT NULL AND company_ticker <> '' "
+        f"FROM exchange_filing WHERE {where} "
         "GROUP BY company_ticker ORDER BY filing_count DESC, company_ticker ASC "
         "LIMIT %s OFFSET %s"
     )
-    return _fetch_all(sql, [limit, offset])
+    return _fetch_all(sql, [*params, limit, offset])
 
 
 def fetch_coverage() -> Tuple[List[Dict[str, Any]], str]:

@@ -463,14 +463,17 @@ def _tool_count_filings(
     return {"read_sink": _read_sink_id(), "filtered": filtered, "counts": counts}
 
 
-def _tool_list_tickers(limit: int, offset: int) -> Dict[str, Any]:
+def _tool_list_tickers(limit: int, offset: int, ticker: str = "") -> Dict[str, Any]:
     limit = _clamp(limit, 1, MAX_TICKERS)
     offset = max(0, int(offset or 0))
     sink = _read_sink()
     tickers, error_code = sink.distinct_company_tickers()
     if error_code:
         _fail(error_code, sink.id)
-    tickers = sorted(ticker for ticker in tickers if ticker)
+    tickers = sorted(t for t in tickers if t)
+    query = (ticker or "").strip().lower()
+    if query:
+        tickers = [t for t in tickers if query in t.lower()]
     window = tickers[offset : offset + limit]
     return {"read_sink": sink.id, **_page(window, offset, limit, total=len(tickers))}
 
@@ -605,11 +608,14 @@ def _tool_get_statistics(
     }
 
 
-def _tool_list_companies(limit: int = DEFAULT_PAGE_SIZE, offset: int = 0) -> Dict[str, Any]:
+def _tool_list_companies(
+    ticker: str = "", limit: int = DEFAULT_PAGE_SIZE, offset: int = 0
+) -> Dict[str, Any]:
     limit = _clamp(limit, 1, MAX_PAGE_SIZE)
     offset = max(0, int(offset or 0))
+    ticker = (ticker or "").strip()
     sink = _read_sink()
-    rows, error_code = sink.list_companies(limit, offset)
+    rows, error_code = sink.list_companies(limit, offset, ticker)
     if error_code:
         _fail(error_code, sink.id)
     return {"read_sink": sink.id, **_page(rows, offset, limit)}
@@ -985,6 +991,9 @@ def count_filings(
 
 @_as_tool
 def list_tickers(
+    ticker: Annotated[
+        str, Field(description="Case-insensitive substring match, e.g. '0700'; empty lists all.")
+    ] = "",
     limit: Annotated[
         int, Field(description="Maximum tickers to return (1..1000).")
     ] = DEFAULT_PAGE_SIZE,
@@ -992,14 +1001,19 @@ def list_tickers(
 ) -> Dict[str, Any]:
     """Use this to list the distinct company tickers that have filings.
 
-    Use list_companies instead to include company names and filing counts. Returns an
-    alphabetically sorted, paged list. Use search_filings to fetch filings for a ticker.
+    Use list_companies instead to include company names and filing counts. ``ticker`` is a
+    case-insensitive substring match (e.g. '0700' matches '0700.HK'); empty lists every
+    ticker, alphabetically sorted and paged via ``limit``/``offset``. Use search_filings to
+    fetch filings for a ticker.
     """
-    return _tool_list_tickers(limit, offset)
+    return _tool_list_tickers(limit, offset, ticker)
 
 
 @_as_tool
 def list_companies(
+    ticker: Annotated[
+        str, Field(description="Case-insensitive substring match, e.g. '0700'; empty lists all.")
+    ] = "",
     limit: Annotated[
         int, Field(description="Maximum companies to return (1..100).")
     ] = DEFAULT_PAGE_SIZE,
@@ -1007,11 +1021,12 @@ def list_companies(
 ) -> Dict[str, Any]:
     """Use this to list companies (ticker and name) with their filing counts.
 
-    Use list_tickers instead to list just the ticker codes. Returns a paged list ordered by
-    filing count descending. Use search_filings for a company's filings. This tool is
-    read-only.
+    Use list_tickers instead to list just the ticker codes. ``ticker`` is a case-insensitive
+    substring match (e.g. '0700' matches '0700.HK'); empty returns every company, ordered by
+    filing count descending (ties broken by ticker ascending) and paged via
+    ``limit``/``offset``. Use search_filings for a company's filings. This tool is read-only.
     """
-    return _tool_list_companies(limit, offset)
+    return _tool_list_companies(ticker, limit, offset)
 
 
 @_as_tool

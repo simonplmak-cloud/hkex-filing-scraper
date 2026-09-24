@@ -581,13 +581,18 @@ class MongoDBSink(Sink):
         except Exception as exc:  # noqa: BLE001
             return [], redact(str(exc)) or code(self.id, SUFFIX_WRITE_ERROR)
 
-    def list_companies(self, limit: int, offset: int) -> Tuple[List[Dict[str, Any]], str]:
+    def list_companies(
+        self, limit: int, offset: int, ticker: str = ""
+    ) -> Tuple[List[Dict[str, Any]], str]:
         db, err = self._database()
         if err:
             return [], err
         try:
+            match: Dict[str, Any] = {"company_ticker": {"$nin": [None, ""]}}
+            if ticker:
+                match["company_ticker"] = {"$regex": re.escape(ticker), "$options": "i"}
             pipeline = [
-                {"$match": {"company_ticker": {"$nin": [None, ""]}}},
+                {"$match": match},
                 {
                     "$group": {
                         "_id": "$company_ticker",

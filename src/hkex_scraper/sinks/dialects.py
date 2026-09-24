@@ -479,16 +479,22 @@ class Dialect:
         sql = f"SELECT count(*) FROM {self.q('exchange_filing')} WHERE {where}"
         return sql, params
 
-    def list_companies_sql(self, limit: int, offset: int) -> Tuple[str, list]:
-        ticker = self.q("company_ticker")
+    def list_companies_sql(self, limit: int, offset: int, ticker: str = "") -> Tuple[str, list]:
+        col = self.q("company_ticker")
+        clauses = [f"{col} IS NOT NULL", f"{col} <> ''"]
+        params: List[Any] = []
+        if ticker:
+            clauses.append(f"LOWER({col}) LIKE LOWER({self.ph})")
+            params.append(f"%{ticker}%")
+        where = " AND ".join(clauses)
         sql = (
-            f"SELECT {ticker} AS {self.q('company_ticker')}, "
+            f"SELECT {col} AS {self.q('company_ticker')}, "
             f"MAX({self.q('stock_name')}) AS {self.q('stock_name')}, "
             f"count(*) AS {self.q('filing_count')} FROM {self.q('exchange_filing')} "
-            f"WHERE {ticker} IS NOT NULL AND {ticker} <> '' GROUP BY {ticker} "
-            f"ORDER BY {self.q('filing_count')} DESC, {ticker} ASC LIMIT {self.ph} OFFSET {self.ph}"
+            f"WHERE {where} GROUP BY {col} "
+            f"ORDER BY {self.q('filing_count')} DESC, {col} ASC LIMIT {self.ph} OFFSET {self.ph}"
         )
-        return sql, [limit, offset]
+        return sql, [*params, limit, offset]
 
 
 class PostgresDialect(Dialect):
