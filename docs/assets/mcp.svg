@@ -63,7 +63,7 @@
 
   <rect class="panel grn" x="340" y="280" width="280" height="86" rx="7"/>
   <text class="mono box" x="358" y="308">hkex-scraper-mcp</text>
-  <text class="mono sub" x="358" y="330">read-only · 16 tools</text>
+  <text class="mono sub" x="358" y="330">read-only · 17 tools</text>
 
   <path class="arrow" d="M620 323 H 726" marker-end="url(#ah)"/>
   <text class="mono edge" x="652" y="312">SQL reads</text>

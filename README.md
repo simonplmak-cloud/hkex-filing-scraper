@@ -8,6 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-server-blueviolet)](https://hkex-listco-updates.ascent-partners.com/ai-agents/)
+[![mcp-hkex-filing MCP server – quality and maintenance score on Glama](https://glama.ai/mcp/servers/simonplmak-cloud/hkex-filing-scraper/badges/score.svg)](https://glama.ai/mcp/servers/simonplmak-cloud/hkex-filing-scraper)
 [![Docs](https://img.shields.io/badge/docs-hkex--listco--updates.ascent--partners.com-blue)](https://hkex-listco-updates.ascent-partners.com/)
 [![Ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
@@ -78,9 +79,16 @@ then summarise the interim report.
 
 Ready-made configuration for Claude, ChatGPT, Cursor, VS Code/Copilot, Gemini CLI, opencode,
 Manus, and Perplexity is in [AI agent support](docs/ai-agents.md) — and for a stored corpus,
-the [stdio MCP server](docs/mcp.md) exposes a wider tool catalog. The gateway is listed in the
-[official MCP Registry](https://registry.modelcontextprotocol.io/) as
+the [stdio MCP server](docs/mcp.md) exposes a wider tool catalog and is published on
+[Glama](https://glama.ai/mcp/servers/simonplmak-cloud/hkex-filing-scraper). The gateway is listed
+in the [official MCP Registry](https://registry.modelcontextprotocol.io/) as
 `io.github.simonplmak-cloud/hkex-filings`.
+
+> **Featured on Glama** — the read-only [stdio MCP server](docs/mcp.md) is also published on
+> [Glama](https://glama.ai/mcp/servers/simonplmak-cloud/hkex-filing-scraper), where Glama scans the
+> built server and scores tool-definition quality (currently 4.7/5).
+>
+> [![mcp-hkex-filing MCP server – quality and maintenance score on Glama](https://glama.ai/mcp/servers/simonplmak-cloud/hkex-filing-scraper/badges/card.svg)](https://glama.ai/mcp/servers/simonplmak-cloud/hkex-filing-scraper)
 
 ## Quick start (local)
 

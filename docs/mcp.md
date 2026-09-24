@@ -12,9 +12,13 @@ schema DDL.
 
 To query HKEx live without a database, see the [live MCP gateway](live-mcp.md) instead.
 
+A hosted copy of this stdio server (built from this repository's Dockerfile) is published on
+[Glama](https://glama.ai/mcp/servers/simonplmak-cloud/hkex-filing-scraper), where Glama scans the
+built server and scores tool-definition quality.
+
 ```mermaid
 flowchart LR
-    A["AI agent<br/>any MCP host"] -->|stdio| S["hkex-scraper-mcp<br/>read-only · 16 tools"]
+    A["AI agent<br/>any MCP host"] -->|stdio| S["hkex-scraper-mcp<br/>read-only · 17 tools"]
     S -->|"SQL reads"| D["Your database<br/>nine sinks"]
 ```
 
